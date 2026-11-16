@@ -8,9 +8,9 @@ name=Carl Spihlmann
 
 title1=Student MDBM
 
-title2=German
+title2=Working Student Customer Evolution @SAP
 
-expertise=Internet Marketing, AI Applications, Agentic AI
+expertise=Consulting & Sales, SAP Maintenance Guidance
 
 education=M.Sc. Digital Business Management, Hochschule Pforzheim
 
