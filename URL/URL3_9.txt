@@ -1,2 +1,2 @@
 Extra Credit Challenge
-http://localhost:8000/style
+https://spihlmann-a11y.github.io/style_transfer_standalone.htm
