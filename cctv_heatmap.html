@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CCTV Heatmap</title>
+<!-- Single-file CCTV activity heatmap with Ultralytics YOLO26n (ONNX) running in the browser.
+     Served by the VisionAI app (/static/cctv_heatmap.html) it loads the model and the stream proxy from the server.
+     Opened directly from disk, pick models/yolo26n.onnx once and use a camera that allows cross-origin access. -->
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.webgpu.min.js"></script>
+<style>
+  :root {
+    --bg: #0b1020; --panel: #121a2e; --panel2: #0e1528; --line: #24304d; --text: #e6ebf5; --muted: #8a97b4;
+    --accent: #f97316; --accent2: #fb923c; --ok: #34d399; --warn: #fbbf24; --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: #0d1426; position: sticky; top: 0; z-index: 5; }
+  .logo { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(135deg, #f97316, #dc2626); font-size: 18px; }
+  h1 { font-size: 16px; margin: 0; }
+  .sub { color: var(--muted); font-size: 12px; }
+  .pill { margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); font-size: 12px; white-space: nowrap; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+  .pill.ready .dot { background: var(--ok); } .pill.live .dot { background: var(--bad); animation: pulse 1.2s infinite; } .pill.error .dot { background: var(--bad); }
+  @keyframes pulse { 50% { opacity: .35; } }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; padding: 16px 20px; max-width: 1600px; margin: 0 auto; }
+  @media (max-width: 960px) { main { grid-template-columns: 1fr; padding: 12px 16px; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .card h2 { font-size: 13px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .card h2 .hint { margin-left: auto; font-weight: 400; color: var(--muted); font-size: 11px; }
+  aside { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .stage-card { padding: 0; overflow: hidden; }
+  .stage { position: relative; background: #000; display: flex; align-items: center; justify-content: center; min-height: 260px; }
+  #view { display: block; max-width: 100%; max-height: 72vh; }
+  .placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); padding: 24px; }
+  .hud { position: absolute; top: 8px; left: 8px; display: flex; gap: 6px; flex-wrap: wrap; font: 11px ui-monospace, monospace; }
+  .hud span { background: rgba(0,0,0,.6); padding: 2px 7px; border-radius: 5px; }
+  .legend { position: absolute; right: 10px; bottom: 10px; background: rgba(0,0,0,.6); padding: 6px 8px; border-radius: 8px; font-size: 10px; color: #cbd5e1; display: none; }
+  .legend canvas { display: block; width: 140px; height: 10px; border-radius: 3px; margin: 3px 0; }
+  .legend .ends { display: flex; justify-content: space-between; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--line); align-items: center; }
+  .info { padding: 0 12px 10px; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  button, .btn { font: inherit; font-size: 12px; color: var(--text); background: #1a2440; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  button:hover, .btn:hover { background: #22305a; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { background: var(--accent2); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+  .seg button[aria-pressed="true"] { background: rgba(249,115,22,.18); border-color: rgba(249,115,22,.7); color: #fed7aa; }
+  input[type=url], input[type=text], select { width: 100%; font: inherit; font-size: 13px; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  label.row { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  label.row .val { color: var(--text); font-weight: 600; float: right; }
+  label.check { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 6px 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .flex { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  .stat .k { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .stat .v { font-size: 20px; font-weight: 700; margin-top: 2px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .note { font-size: 11px; color: var(--muted); margin: 8px 0 0; line-height: 1.5; }
+  #toast { position: fixed; right: 16px; bottom: 16px; max-width: 360px; padding: 10px 14px; border-radius: 10px; background: #1f2a48; border: 1px solid var(--line); font-size: 13px; opacity: 0; transform: translateY(10px); transition: .25s; pointer-events: none; z-index: 10; }
+  #toast.show { opacity: 1; transform: none; }
+  #toast.error { background: #4c1d1d; border-color: #7f1d1d; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🔥</div>
+  <div>
+    <h1>CCTV Heatmap</h1>
+    <div class="sub">Where traffic and people move · Ultralytics YOLO26n in your browser</div>
+  </div>
+  <div id="pill" class="pill"><span class="dot"></span><span id="status">Loading…</span></div>
+</header>
+
+<main>
+  <section style="display:flex;flex-direction:column;gap:12px;min-width:0">
+    <div class="card">
+      <form id="camForm" class="flex" style="flex-wrap:nowrap">
+        <input id="camUrl" type="url" required value="https://cctv.klcg.gov.tw/facd4662" placeholder="CCTV URL: MJPEG stream, snapshot image or video">
+        <button class="primary" type="submit">Connect</button>
+      </form>
+      <div class="flex" style="margin-top:8px">
+        <button type="button" class="preset" data-url="https://cctv.klcg.gov.tw/facd4662">Keelung traffic cam</button>
+        <label class="btn">Open recorded clip<input id="clipInput" type="file" accept="video/*" hidden></label>
+        <span class="muted" id="proxyNote"></span>
+      </div>
+    </div>
+
+    <div class="card stage-card">
+      <div class="stage" id="stageWrap">
+        <canvas id="view"></canvas>
+        <div class="placeholder" id="placeholder">Load the model, then connect a camera.</div>
+        <div class="hud hidden" id="hud">
+          <span><b id="hFps">0</b> fps</span><span><b id="hMs">0</b> ms</span><span><b id="hDet">0</b> objects</span><span id="hPaused" class="hidden" style="color:#fbbf24">paused</span>
+        </div>
+        <div class="legend" id="legend">
+          <div id="legendTitle">activity</div>
+          <canvas id="legendBar" width="140" height="10"></canvas>
+          <div class="ends"><span>low</span><span>high</span></div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="seg" id="viewMode" style="min-width:260px">
+          <button type="button" data-v="overlay" aria-pressed="true">Overlay</button>
+          <button type="button" data-v="heat" aria-pressed="false">Heat only</button>
+          <button type="button" data-v="camera" aria-pressed="false">Camera</button>
+        </div>
+        <span style="flex:1"></span>
+        <button type="button" id="btnPause">Pause</button>
+        <button type="button" id="btnReset">Reset heatmap</button>
+        <button type="button" id="btnFull" title="Fullscreen">⛶</button>
+        <button type="button" id="btnStop" title="Disconnect">■</button>
+      </div>
+      <div class="info" id="srcInfo"></div>
+    </div>
+
+    <div class="card">
+      <h2>Statistics <span class="hint" id="since"></span></h2>
+      <div class="stats" style="grid-template-columns:repeat(4,1fr)">
+        <div class="stat"><div class="k">Frames analyzed</div><div class="v" id="sFrames">0</div></div>
+        <div class="stat"><div class="k">Detections added</div><div class="v" id="sAdded">0</div></div>
+        <div class="stat"><div class="k">Ignored (parked)</div><div class="v" id="sStatic">0</div></div>
+        <div class="stat"><div class="k">Area covered</div><div class="v" id="sCover">0%</div></div>
+      </div>
+    </div>
+  </section>
+
+  <aside>
+    <div class="card" id="modelCard">
+      <h2>Model <span class="hint" id="modelState">not loaded</span></h2>
+      <div id="modelPick" class="hidden">
+        <p class="muted" style="margin:0 0 8px">Choose <b>yolo26n.onnx</b> (in the project's <code>models/</code> folder), or paste a URL to it.</p>
+        <label class="btn" style="width:100%;justify-content:center">Choose yolo26n.onnx…<input id="modelFile" type="file" accept=".onnx" hidden></label>
+        <div class="flex" style="margin-top:8px;flex-wrap:nowrap">
+          <input id="modelUrl" type="url" placeholder="https://…/yolo26n.onnx">
+          <button type="button" id="modelUrlBtn">Load</button>
+        </div>
+      </div>
+      <label class="row" style="margin:8px 0 0">Backend
+        <select id="backend"><option value="auto">Auto (WebGPU → WASM)</option><option value="webgpu">WebGPU</option><option value="wasm">WASM (CPU)</option></select>
+      </label>
+    </div>
+
+    <div class="card">
+      <h2>What to map</h2>
+      <div class="seg" id="classSet" style="margin-bottom:10px">
+        <button type="button" data-v="vehicles" aria-pressed="true">Vehicles</button>
+        <button type="button" data-v="people" aria-pressed="false">People</button>
+        <button type="button" data-v="both" aria-pressed="false">Both</button>
+      </div>
+      <label class="check"><input type="checkbox" id="movingOnly" checked> Moving objects only (ignore parked)</label>
+      <label class="check"><input type="checkbox" id="showBoxes" checked> Show detection boxes</label>
+      <label class="check"><input type="checkbox" id="autoReset" checked> New heatmap when the camera view changes</label>
+      <label class="row" style="margin-top:8px">Anchor point
+        <select id="anchor"><option value="foot">Ground contact (bottom of box)</option><option value="center">Box center</option><option value="area">Whole box area</option></select>
+      </label>
+      <label class="row">Confidence <span class="val" id="confVal">0.30</span><input id="conf" type="range" min="0.1" max="0.9" step="0.05" value="0.3"></label>
+    </div>
+
+    <div class="card">
+      <h2>Heatmap</h2>
+      <div class="grid2">
+        <label class="row">Memory
+          <select id="halfLife"><option value="30">Last ~30 s</option><option value="120" selected>Last ~2 min</option><option value="600">Last ~10 min</option><option value="3600">Last ~1 h</option><option value="0">Cumulative</option></select>
+        </label>
+        <label class="row">Colors
+          <select id="palette"><option value="thermal">Thermal</option><option value="jet">Rainbow</option><option value="viridis">Viridis</option><option value="mono">Green</option></select>
+        </label>
+      </div>
+      <label class="row">Opacity <span class="val" id="opacityVal">65%</span><input id="opacity" type="range" min="0.1" max="1" step="0.05" value="0.65"></label>
+      <label class="row">Contrast <span class="val" id="gammaVal">0.60</span><input id="gamma" type="range" min="0.25" max="1.5" step="0.05" value="0.6"></label>
+      <label class="row">Smoothness <span class="val" id="blurVal">6 px</span><input id="blur" type="range" min="0" max="24" step="1" value="6"></label>
+      <label class="row">Grid resolution
+        <select id="res"><option value="80">Coarse (80)</option><option value="160" selected>Medium (160)</option><option value="240">Fine (240)</option></select>
+      </label>
+    </div>
+
+    <div class="card">
+      <h2>Export</h2>
+      <div class="flex">
+        <button type="button" id="exPng">Snapshot PNG</button>
+        <button type="button" id="exHeat">Heat layer PNG</button>
+        <button type="button" id="exCsv">Grid CSV</button>
+      </div>
+      <div class="flex" style="margin-top:6px">
+        <button type="button" id="exJson">Save heatmap</button>
+        <label class="btn">Load heatmap<input id="loadJson" type="file" accept=".json,application/json" hidden></label>
+      </div>
+      <p class="note">“Save heatmap” stores the raw grid as JSON so you can continue it later for the same camera.</p>
+    </div>
+  </aside>
+</main>
+<div id="toast"></div>
+
+<script>
+'use strict';
+// ------------------------------------------------------------------ constants
+const ORT_DIST = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
+const SIZE = 640;
+const COCO = ['person','bicycle','car','motorcycle','airplane','bus','train','truck','boat','traffic light','fire hydrant','stop sign','parking meter','bench','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra','giraffe','backpack','umbrella','handbag','tie','suitcase','frisbee','skis','snowboard','sports ball','kite','baseball bat','baseball glove','skateboard','surfboard','tennis racket','bottle','wine glass','cup','fork','knife','spoon','bowl','banana','apple','sandwich','orange','broccoli','carrot','hot dog','pizza','donut','cake','chair','couch','potted plant','bed','dining table','toilet','tv','laptop','mouse','remote','keyboard','cell phone','microwave','oven','toaster','sink','refrigerator','book','clock','vase','scissors','teddy bear','hair drier','toothbrush'];
+const CLASS_SETS = { vehicles: [1, 2, 3, 5, 7], people: [0], both: [0, 1, 2, 3, 5, 7] };
+const SERVED = location.protocol.startsWith('http');
+const $ = (id) => document.getElementById(id);
+// `ort` is the global from the onnxruntime-web script tag.
+ort.env.wasm.wasmPaths = ORT_DIST;
+ort.env.logLevel = 'error';
+
+const S = {
+  session: null, backend: '', modelBytes: null,
+  source: null, paused: false, lastKey: null, lastT: 0,
+  dets: [], history: [], fps: [], inferMs: 0,
+  grid: null, cols: 0, rows: 0, frames: 0, added: 0, ignored: 0, startedAt: 0,
+};
+
+// ------------------------------------------------------------------ ui helpers
+function status(text, tone = 'loading') { $('status').textContent = text; $('pill').className = `pill ${tone}`; }
+let toastTimer;
+function toast(msg, type = 'info') {
+  const t = $('toast'); t.textContent = msg; t.className = `show ${type}`;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), 3500);
+}
+function segValue(id) { return $(id).querySelector('[aria-pressed="true"]').dataset.v; }
+function bindSeg(id, onChange) {
+  $(id).addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    for (const x of $(id).children) x.setAttribute('aria-pressed', String(x === b));
+    onChange?.(b.dataset.v);
+  });
+}
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+const stamp = () => new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// ------------------------------------------------------------------ model
+async function createSession(bytes, pref) {
+  S.session = null;
+  const order = pref === 'auto' ? ['webgpu', 'wasm'] : [pref];
+  let last;
+  for (const ep of order) {
+    if (ep === 'webgpu' && !navigator.gpu) { last = new Error('WebGPU is not available'); continue; }
+    try {
+      status(`Starting YOLO26n on ${ep.toUpperCase()}…`);
+      const s = await ort.InferenceSession.create(bytes, { executionProviders: [ep], graphOptimizationLevel: 'all', logSeverityLevel: 3 });
+      await s.run({ [s.inputNames[0]]: new ort.Tensor('float32', new Float32Array(3 * SIZE * SIZE), [1, 3, SIZE, SIZE]) });
+      S.session = s; S.backend = ep;
+      $('modelState').textContent = `YOLO26n · ${ep === 'webgpu' ? 'WebGPU' : 'WASM'}`;
+      $('modelPick').classList.add('hidden');
+      status(S.source ? 'Mapping activity' : 'Ready — connect a camera', S.source ? 'live' : 'ready');
+      if (!S.source) $('placeholder').textContent = 'Model ready. Connect a camera.';
+      return;
+    } catch (err) { console.warn(ep, err); last = err; }
+  }
+  throw last;
+}
+
+async function loadModelFrom(bytesPromise) {
+  try {
+    S.modelBytes = await bytesPromise;
+    await createSession(S.modelBytes, $('backend').value);
+  } catch (err) {
+    console.error(err);
+    status('Model not loaded', 'error');
+    toast(`Could not load the model: ${err.message}`, 'error');
+    $('modelPick').classList.remove('hidden');
+  }
+}
+
+async function fetchBytes(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+// ------------------------------------------------------------------ detection
+const prep = new OffscreenCanvas(SIZE, SIZE).getContext('2d', { willReadFrequently: true });
+const input = new Float32Array(3 * SIZE * SIZE);
+
+function iou(a, b) {
+  const ix = Math.max(0, Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1));
+  const iy = Math.max(0, Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1));
+  const i = ix * iy, u = (a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - i;
+  return u > 0 ? i / u : 0;
+}
+
+async function detect(img, w, h, conf, allowed) {
+  const scale = Math.min(SIZE / w, SIZE / h), nw = Math.round(w * scale), nh = Math.round(h * scale);
+  const px = Math.floor((SIZE - nw) / 2), py = Math.floor((SIZE - nh) / 2);
+  prep.fillStyle = 'rgb(114,114,114)'; prep.fillRect(0, 0, SIZE, SIZE);
+  prep.drawImage(img, 0, 0, w, h, px, py, nw, nh);
+  const rgba = prep.getImageData(0, 0, SIZE, SIZE).data, plane = SIZE * SIZE;
+  for (let i = 0, p = 0; p < plane; i += 4, p++) { input[p] = rgba[i] / 255; input[p + plane] = rgba[i + 1] / 255; input[p + 2 * plane] = rgba[i + 2] / 255; }
+  const t0 = performance.now();
+  const out = await S.session.run({ [S.session.inputNames[0]]: new ort.Tensor('float32', input, [1, 3, SIZE, SIZE]) });
+  S.inferMs = performance.now() - t0;
+  const { data, dims } = out[S.session.outputNames[0]];
+  const map = (x1, y1, x2, y2) => ({
+    x1: Math.max(0, (x1 - px) / scale), y1: Math.max(0, (y1 - py) / scale),
+    x2: Math.min(w, (x2 - px) / scale), y2: Math.min(h, (y2 - py) / scale),
+  });
+  const dets = [];
+  if (dims[2] === 6) { // NMS-free YOLO26 head: [1, N, 6] = x1 y1 x2 y2 score cls
+    for (let i = 0; i < dims[1]; i++) {
+      const o = i * 6, score = data[o + 4], cls = Math.round(data[o + 5]);
+      if (score >= conf && allowed.has(cls)) dets.push({ ...map(data[o], data[o + 1], data[o + 2], data[o + 3]), score, cls });
+    }
+    return dets;
+  }
+  // Raw head [1, 4+C, A]: best class per anchor + NMS.
+  const A = dims[2], C = dims[1] - 4;
+  for (let a = 0; a < A; a++) {
+    let best = -1, score = conf;
+    for (const c of allowed) if (c < C && data[(4 + c) * A + a] >= score) { score = data[(4 + c) * A + a]; best = c; }
+    if (best < 0) continue;
+    const cx = data[a], cy = data[A + a], bw = data[2 * A + a], bh = data[3 * A + a];
+    dets.push({ ...map(cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2), score, cls: best });
+  }
+  dets.sort((p, q) => q.score - p.score);
+  const keep = [];
+  for (const d of dets) if (keep.every(k => k.cls !== d.cls || iou(k, d) < 0.45)) keep.push(d);
+  return keep;
+}
+
+// ------------------------------------------------------------------ sources
+// A source: { label, frame(), width(), height(), ready(), key(), stop(), video? }
+function mjpegSource(label, res, abort) {
+  let bmp = null, id = 0, busy = false, pending = null, stopped = false, buf = new Uint8Array(0);
+  const decode = async (bytes) => {
+    if (busy) { pending = bytes; return; }
+    busy = true;
+    try {
+      const b = await createImageBitmap(new Blob([bytes], { type: 'image/jpeg' }));
+      if (stopped) b.close(); else { bmp?.close(); bmp = b; id++; }
+    } catch { /* corrupt frame */ }
+    busy = false;
+    if (pending) { const p = pending; pending = null; decode(p); }
+  };
+  const find = (arr, a, b, from) => { for (let i = from; i < arr.length - 1; i++) if (arr[i] === a && arr[i + 1] === b) return i; return -1; };
+  (async () => {
+    const reader = res.body.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const m = new Uint8Array(buf.length + value.length); m.set(buf); m.set(value, buf.length);
+        let pos = 0, latest = null;
+        for (;;) {
+          const s = find(m, 0xff, 0xd8, pos); if (s < 0) { pos = Math.max(pos, m.length - 1); break; }
+          const e = find(m, 0xff, 0xd9, s + 2); if (e < 0) { pos = s; break; }
+          latest = m.subarray(s, e + 2); pos = e + 2;
+        }
+        if (latest) decode(latest.slice());
+        buf = m.slice(pos);
+        if (buf.length > 8e6) buf = new Uint8Array(0);
+      }
+      if (!stopped) toast('The camera stream ended.');
+    } catch (err) { if (!stopped) toast(`Stream interrupted: ${err.message}`, 'error'); }
+  })();
+  return {
+    label, frame: () => bmp, width: () => bmp?.width || 0, height: () => bmp?.height || 0,
+    ready: () => !!bmp, key: () => id, stop() { stopped = true; abort.abort(); bmp?.close(); bmp = null; },
+  };
+}
+
+function snapshotSource(label, url) {
+  let bmp = null, id = 0, timer = null;
+  const load = async () => {
+    try {
+      const r = await fetch(url + (url.includes('?') ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' });
+      const b = await createImageBitmap(await r.blob()); bmp?.close(); bmp = b; id++;
+    } catch { /* keep last frame */ }
+  };
+  return {
+    label, frame: () => bmp, width: () => bmp?.width || 0, height: () => bmp?.height || 0,
+    ready: () => !!bmp, key: () => id, stop() { clearInterval(timer); bmp?.close(); },
+    async start() { await load(); if (!bmp) throw new Error('Could not load the image.'); timer = setInterval(load, 1000); return this; },
+  };
+}
+
+function videoSource(label, src) {
+  const v = document.createElement('video');
+  Object.assign(v, { muted: true, playsInline: true, loop: true, crossOrigin: 'anonymous', src });
+  v.style.cssText = 'position:fixed;width:2px;height:2px;opacity:0;pointer-events:none;left:0;top:0';
+  document.body.appendChild(v);
+  return {
+    label, video: v, frame: () => v, width: () => v.videoWidth, height: () => v.videoHeight,
+    ready: () => v.readyState >= 2 && v.videoWidth > 0, key: () => (v.paused ? `p${v.currentTime}` : `t${v.currentTime}`),
+    stop() { v.pause(); v.removeAttribute('src'); v.load(); v.remove(); },
+    async start() {
+      await new Promise((ok, fail) => { v.onloadeddata = ok; v.onerror = () => fail(new Error('The video could not be played.')); });
+      await v.play().catch(() => {}); return this;
+    },
+  };
+}
+
+async function openUrl(url) {
+  if (!/^https?:\/\//i.test(url)) throw new Error('Enter an http(s) URL.');
+  const host = new URL(url).host;
+  const attempts = [[url, host]];
+  if (SERVED) attempts.push([`/api/yolo/proxy?u=${encodeURIComponent(url)}`, `${host} · via local proxy`]);
+  let last;
+  for (const [target, label] of attempts) {
+    const abort = new AbortController();
+    try {
+      const res = await fetch(target, { signal: abort.signal, cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const type = (res.headers.get('content-type') || '').toLowerCase();
+      if (type.startsWith('multipart/')) return mjpegSource(`${label} · MJPEG`, res, abort);
+      abort.abort();
+      if (type.startsWith('image/')) return snapshotSource(`${label} · snapshot`, target).start();
+      if (type.startsWith('video/')) return videoSource(`${label} · video`, target).start();
+      throw new Error(`Unsupported stream type "${type || 'unknown'}" (use MJPEG, a snapshot image or a video file)`);
+    } catch (err) {
+      abort.abort(); last = err;
+      if (err.name === 'TypeError' && !SERVED) last = new Error('The camera blocks cross-origin access. Open this page through the VisionAI app to use its proxy.');
+    }
+  }
+  throw last;
+}
+
+async function connect(factory) {
+  stop();
+  $('placeholder').textContent = 'Connecting…';
+  $('placeholder').classList.remove('hidden');
+  try {
+    S.source = await factory();
+    S.paused = false; S.lastKey = null; S.history = [];
+    resetHeat();
+    $('placeholder').classList.add('hidden');
+    $('hud').classList.remove('hidden');
+    $('srcInfo').textContent = S.source.label;
+    $('btnPause').textContent = 'Pause';
+    status(S.session ? 'Mapping activity' : 'Waiting for the model…', S.session ? 'live' : 'loading');
+  } catch (err) {
+    console.error(err);
+    $('placeholder').textContent = `Could not open the camera: ${err.message}`;
+    toast(err.message, 'error');
+  }
+}
+
+function stop() {
+  S.source?.stop(); S.source = null; S.dets = [];
+  $('hud').classList.add('hidden'); $('srcInfo').textContent = '';
+  if (S.session) status('Ready — connect a camera', 'ready');
+}
+
+// ------------------------------------------------------------------ heat grid
+const frameCanvas = document.createElement('canvas');
+const fctx = frameCanvas.getContext('2d');
+
+function resetHeat() {
+  const w = frameCanvas.width || 16, h = frameCanvas.height || 9;
+  S.cols = +$('res').value;
+  S.rows = Math.max(1, Math.round(S.cols * h / w));
+  S.grid = new Float32Array(S.cols * S.rows);
+  S.frames = 0; S.added = 0; S.ignored = 0; S.startedAt = Date.now(); S.lastT = 0;
+}
+
+/** Adds a gaussian blob (peak 1) at cell (cx, cy) with radius r cells. */
+function splat(cx, cy, r, weight = 1) {
+  const { grid, cols, rows } = S, R = Math.ceil(r * 2), inv = 1 / (2 * r * r);
+  for (let y = Math.max(0, Math.floor(cy - R)); y <= Math.min(rows - 1, Math.ceil(cy + R)); y++) {
+    for (let x = Math.max(0, Math.floor(cx - R)); x <= Math.min(cols - 1, Math.ceil(cx + R)); x++) {
+      const d2 = (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2;
+      grid[y * cols + x] += weight * Math.exp(-d2 * inv);
+    }
+  }
+}
+
+/** Objects whose box is (almost) unchanged since ~1.5 s ago count as parked/static. */
+function isStatic(d, now) {
+  const past = S.history.find(h => now - h.t >= 1200);
+  if (!past) return null; // not enough history yet
+  return past.dets.some(p => p.cls === d.cls && iou(p, d) > 0.8);
+}
+
+function addToHeat(dets, w, h, now) {
+  const halfLife = +$('halfLife').value;
+  if (halfLife > 0 && S.lastT) {
+    const decay = Math.pow(0.5, (now - S.lastT) / 1000 / halfLife);
+    for (let i = 0; i < S.grid.length; i++) S.grid[i] *= decay;
+  }
+  S.lastT = now;
+  const movingOnly = $('movingOnly').checked, anchor = $('anchor').value;
+  const sx = S.cols / w, sy = S.rows / h;
+  for (const d of dets) {
+    const st = isStatic(d, now);
+    d.static = st === true;
+    if (movingOnly && st !== false) { if (st) S.ignored++; continue; }
+    const bw = (d.x2 - d.x1) * sx, bh = (d.y2 - d.y1) * sy;
+    if (anchor === 'area') {
+      // Spread the weight over the box with a few blobs.
+      const n = 3;
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+        splat((d.x1 + (d.x2 - d.x1) * (i + 0.5) / n) * sx, (d.y1 + (d.y2 - d.y1) * (j + 0.5) / n) * sy, Math.max(0.8, Math.min(bw, bh) / n * 0.6), 1 / (n * n));
+      }
+    } else {
+      const y = anchor === 'foot' ? d.y2 - (d.y2 - d.y1) * 0.08 : (d.y1 + d.y2) / 2;
+      splat(((d.x1 + d.x2) / 2) * sx, y * sy, Math.max(1, Math.min(bw, bh * 2) * 0.3));
+    }
+    S.added++;
+  }
+  S.history.push({ t: now, dets: dets.map(d => ({ x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2, cls: d.cls })) });
+  while (S.history.length && now - S.history[0].t > 3000) S.history.shift();
+}
+
+// ------------------------------------------------------------------ palettes & rendering
+const STOPS = {
+  thermal: [[0, 0, 0, 4], [0.25, 87, 16, 110], [0.5, 188, 55, 84], [0.75, 249, 142, 9], [1, 252, 255, 164]],
+  jet: [[0, 0, 0, 160], [0.25, 0, 140, 255], [0.5, 40, 230, 120], [0.75, 255, 200, 0], [1, 230, 20, 20]],
+  viridis: [[0, 68, 1, 84], [0.25, 59, 82, 139], [0.5, 33, 145, 140], [0.75, 94, 201, 98], [1, 253, 231, 37]],
+  mono: [[0, 0, 40, 10], [0.5, 30, 200, 90], [1, 210, 255, 210]],
+};
+let lut = null, lutName = '';
+function getLut() {
+  const name = $('palette').value;
+  if (lutName === name) return lut;
+  const stops = STOPS[name]; lut = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255; let k = 1;
+    while (k < stops.length - 1 && stops[k][0] < t) k++;
+    const [t0, ...a] = stops[k - 1], [t1, ...b] = stops[k], f = (t - t0) / (t1 - t0 || 1);
+    for (let c = 0; c < 3; c++) lut[i * 3 + c] = a[c] + (b[c] - a[c]) * f;
+  }
+  lutName = name;
+  const lc = $('legendBar').getContext('2d'), img = lc.createImageData(140, 10);
+  for (let x = 0; x < 140; x++) { const i = Math.round(x / 139 * 255); for (let y = 0; y < 10; y++) img.data.set([lut[i * 3], lut[i * 3 + 1], lut[i * 3 + 2], 255], (y * 140 + x) * 4); }
+  lc.putImageData(img, 0, 0);
+  return lut;
+}
+
+const heatCanvas = document.createElement('canvas');
+function renderHeatLayer() {
+  const { grid, cols, rows } = S;
+  heatCanvas.width = cols; heatCanvas.height = rows;
+  const hc = heatCanvas.getContext('2d'), img = hc.createImageData(cols, rows);
+  let max = 0; for (const v of grid) if (v > max) max = v;
+  if (max <= 0) { hc.clearRect(0, 0, cols, rows); return 0; }
+  const L = getLut(), gamma = +$('gamma').value;
+  let covered = 0;
+  for (let i = 0; i < grid.length; i++) {
+    const v = Math.pow(grid[i] / max, gamma);
+    if (v > 0.1) covered++;
+    if (v < 0.02) continue;
+    const k = Math.round(v * 255) * 3;
+    img.data[i * 4] = L[k]; img.data[i * 4 + 1] = L[k + 1]; img.data[i * 4 + 2] = L[k + 2];
+    img.data[i * 4 + 3] = Math.round(255 * Math.min(1, v * 1.4));
+  }
+  hc.putImageData(img, 0, 0);
+  return covered / grid.length;
+}
+
+const view = $('view'), vctx = view.getContext('2d');
+function draw() {
+  const w = frameCanvas.width, h = frameCanvas.height;
+  if (!w) return;
+  if (view.width !== w || view.height !== h) { view.width = w; view.height = h; }
+  const mode = segValue('viewMode');
+  const k = Math.max(1, w / Math.max(1, view.clientWidth));
+  vctx.save();
+  if (mode === 'heat') { vctx.filter = 'grayscale(1) brightness(0.35)'; }
+  vctx.drawImage(frameCanvas, 0, 0);
+  vctx.restore();
+  const coverage = renderHeatLayer();
+  if (mode !== 'camera') {
+    vctx.save();
+    vctx.globalAlpha = mode === 'heat' ? 1 : +$('opacity').value;
+    vctx.imageSmoothingEnabled = true; vctx.imageSmoothingQuality = 'high';
+    const blur = +$('blur').value * k;
+    if (blur > 0) vctx.filter = `blur(${blur}px)`;
+    vctx.drawImage(heatCanvas, 0, 0, w, h);
+    vctx.restore();
+  }
+  $('legend').style.display = mode === 'camera' ? 'none' : 'block';
+  if ($('showBoxes').checked) {
+    vctx.lineWidth = 2 * k;
+    vctx.font = `600 ${Math.round(11 * k)}px system-ui, sans-serif`;
+    vctx.textBaseline = 'bottom';
+    for (const d of S.dets) {
+      const col = d.static ? 'rgba(148,163,184,.8)' : '#22d3ee';
+      vctx.strokeStyle = col; vctx.strokeRect(d.x1, d.y1, d.x2 - d.x1, d.y2 - d.y1);
+      vctx.fillStyle = col; vctx.fillText(`${COCO[d.cls]}${d.static ? ' (parked)' : ''}`, d.x1 + 2 * k, d.y1 - 2 * k);
+    }
+  }
+  $('sCover').textContent = `${Math.round(coverage * 100)}%`;
+}
+
+// ------------------------------------------------------------------ scene-change detection
+// Many public CCTV cameras cycle through preset views. A heatmap mixing two views is meaningless, so a
+// large change of the whole picture (not just moving cars) starts a new heatmap.
+const thumb = new OffscreenCanvas(32, 18).getContext('2d', { willReadFrequently: true });
+let prevThumb = null;
+function sceneChanged() {
+  thumb.drawImage(frameCanvas, 0, 0, 32, 18);
+  const d = thumb.getImageData(0, 0, 32, 18).data, g = new Float32Array(32 * 18);
+  for (let i = 0; i < g.length; i++) g[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  let changed = false;
+  if (prevThumb) {
+    let mean = 0, big = 0;
+    for (let i = 0; i < g.length; i++) { const v = Math.abs(g[i] - prevThumb[i]); mean += v; if (v > 30) big++; }
+    mean /= g.length;
+    changed = mean > 22 && big / g.length > 0.35; // most of the picture changed at once
+  }
+  prevThumb = g;
+  return changed;
+}
+
+// ------------------------------------------------------------------ main loop
+async function loop() {
+  for (;;) {
+    const src = S.source;
+    if (!S.session || !src || S.paused || !src.ready()) { await sleep(40); continue; }
+    const key = src.key();
+    if (key === S.lastKey) { await sleep(15); continue; }
+    try {
+      const w = src.width(), h = src.height();
+      const resized = frameCanvas.width !== w || frameCanvas.height !== h;
+      if (resized) { frameCanvas.width = w; frameCanvas.height = h; }
+      fctx.drawImage(src.frame(), 0, 0, w, h); // copy: an MJPEG bitmap may be replaced while the model runs
+      if (resized || !S.grid) { resetHeat(); prevThumb = null; }
+      if (sceneChanged() && $('autoReset').checked && S.frames > 0) {
+        resetHeat(); S.history = [];
+        toast('Camera view changed — started a new heatmap');
+      }
+      const dets = await detect(frameCanvas, w, h, +$('conf').value, new Set(CLASS_SETS[segValue('classSet')]));
+      if (src !== S.source) continue;
+      S.lastKey = key;
+      const now = performance.now();
+      addToHeat(dets, w, h, now);
+      S.dets = dets; S.frames++;
+      S.fps.push(now); while (S.fps.length && now - S.fps[0] > 2000) S.fps.shift();
+      draw();
+      $('hFps').textContent = (S.fps.length / 2).toFixed(1);
+      $('hMs').textContent = S.inferMs.toFixed(0);
+      $('hDet').textContent = dets.length;
+      $('sFrames').textContent = S.frames.toLocaleString();
+      $('sAdded').textContent = S.added.toLocaleString();
+      $('sStatic').textContent = S.ignored.toLocaleString();
+    } catch (err) {
+      console.error(err); toast(`Analysis failed: ${err.message}`, 'error'); await sleep(1000);
+    }
+  }
+}
+
+setInterval(() => {
+  if (!S.startedAt || !S.source) { $('since').textContent = ''; return; }
+  const m = Math.floor((Date.now() - S.startedAt) / 60000);
+  $('since').textContent = `since ${m < 1 ? 'under a minute' : m + ' min'} · ${+$('halfLife').value ? 'decaying' : 'cumulative'}`;
+}, 1000);
+
+// ------------------------------------------------------------------ export / import
+function heatOnlyBlob() {
+  const c = document.createElement('canvas'); c.width = frameCanvas.width; c.height = frameCanvas.height;
+  const x = c.getContext('2d'); renderHeatLayer();
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+  const blur = +$('blur').value * Math.max(1, c.width / Math.max(1, view.clientWidth));
+  if (blur > 0) x.filter = `blur(${blur}px)`;
+  x.drawImage(heatCanvas, 0, 0, c.width, c.height);
+  return new Promise(r => c.toBlob(r, 'image/png'));
+}
+
+function bindExports() {
+  const need = () => { if (!S.grid || !frameCanvas.width) { toast('Connect a camera first.'); return false; } return true; };
+  $('exPng').onclick = () => need() && view.toBlob(b => download(b, `cctv-heatmap-${stamp()}.png`), 'image/png');
+  $('exHeat').onclick = async () => need() && download(await heatOnlyBlob(), `cctv-heat-layer-${stamp()}.png`);
+  $('exCsv').onclick = () => {
+    if (!need()) return;
+    let max = 0; for (const v of S.grid) if (v > max) max = v;
+    const lines = [`# cols=${S.cols} rows=${S.rows} frame=${frameCanvas.width}x${frameCanvas.height} normalized 0..1`];
+    for (let y = 0; y < S.rows; y++) lines.push(Array.from(S.grid.subarray(y * S.cols, (y + 1) * S.cols), v => (max ? v / max : 0).toFixed(4)).join(','));
+    download(new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }), `cctv-heat-grid-${stamp()}.csv`);
+  };
+  $('exJson').onclick = () => {
+    if (!need()) return;
+    const data = { version: 1, camera: $('camUrl').value, savedAt: new Date().toISOString(), cols: S.cols, rows: S.rows,
+      frame: [frameCanvas.width, frameCanvas.height], frames: S.frames, added: S.added, grid: Array.from(S.grid, v => +v.toFixed(5)) };
+    download(new Blob([JSON.stringify(data)], { type: 'application/json' }), `cctv-heatmap-${stamp()}.json`);
+  };
+  $('loadJson').onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    try {
+      const d = JSON.parse(await f.text());
+      if (!Array.isArray(d.grid) || d.grid.length !== d.cols * d.rows) throw new Error('not a heatmap file');
+      $('res').value = String(d.cols);
+      S.cols = d.cols; S.rows = d.rows; S.grid = Float32Array.from(d.grid);
+      S.frames = d.frames || 0; S.added = d.added || 0; S.lastT = 0;
+      if (!frameCanvas.width) { frameCanvas.width = d.frame[0]; frameCanvas.height = d.frame[1]; }
+      draw();
+      toast(`Loaded heatmap (${d.cols}×${d.rows}) from ${d.savedAt?.slice(0, 16) || 'file'}`, 'info');
+    } catch (err) { toast(`Could not load: ${err.message}`, 'error'); }
+  };
+}
+
+// ------------------------------------------------------------------ settings persistence
+const PERSIST = ['camUrl', 'conf', 'halfLife', 'palette', 'opacity', 'gamma', 'blur', 'res', 'anchor', 'movingOnly', 'showBoxes', 'autoReset', 'backend'];
+function saveSettings() {
+  const s = {}; for (const id of PERSIST) { const el = $(id); s[id] = el.type === 'checkbox' ? el.checked : el.value; }
+  s.classSet = segValue('classSet'); s.viewMode = segValue('viewMode');
+  try { localStorage.setItem('cctv-heatmap-settings', JSON.stringify(s)); } catch { /* storage unavailable */ }
+}
+function loadSettings() {
+  let s = null; try { s = JSON.parse(localStorage.getItem('cctv-heatmap-settings') || 'null'); } catch { /* ignore */ }
+  if (!s) return;
+  for (const id of PERSIST) if (id in s) { const el = $(id); if (el.type === 'checkbox') el.checked = s[id]; else el.value = s[id]; }
+  for (const [seg, v] of [['classSet', s.classSet], ['viewMode', s.viewMode]]) {
+    if (v) for (const b of $(seg).children) b.setAttribute('aria-pressed', String(b.dataset.v === v));
+  }
+}
+
+// ------------------------------------------------------------------ wiring
+function bindUi() {
+  $('camForm').onsubmit = (e) => { e.preventDefault(); connect(() => openUrl($('camUrl').value.trim())); };
+  for (const p of document.querySelectorAll('.preset')) p.onclick = () => { $('camUrl').value = p.dataset.url; connect(() => openUrl(p.dataset.url)); };
+  $('clipInput').onchange = (e) => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (f) connect(() => videoSource(`Recorded clip · ${f.name}`, URL.createObjectURL(f)).start());
+  };
+  $('modelFile').onchange = (e) => { const f = e.target.files[0]; if (f) loadModelFrom(f.arrayBuffer().then(b => new Uint8Array(b))); };
+  $('modelUrlBtn').onclick = () => $('modelUrl').value && loadModelFrom(fetchBytes($('modelUrl').value));
+  $('backend').onchange = () => S.modelBytes && loadModelFrom(Promise.resolve(S.modelBytes));
+  bindSeg('viewMode', draw);
+  bindSeg('classSet', () => { S.history = []; });
+  const show = (id, fmt) => { const el = $(id); const upd = () => { $(id + 'Val').textContent = fmt(+el.value); }; el.addEventListener('input', () => { upd(); draw(); }); upd(); };
+  show('conf', v => v.toFixed(2)); show('opacity', v => `${Math.round(v * 100)}%`); show('gamma', v => v.toFixed(2)); show('blur', v => `${v} px`);
+  for (const id of ['palette', 'showBoxes']) $(id).addEventListener('change', draw);
+  $('res').onchange = () => { resetHeat(); draw(); };
+  $('btnReset').onclick = () => { resetHeat(); draw(); toast('Heatmap reset'); };
+  $('btnPause').onclick = () => {
+    if (!S.source) return;
+    S.paused = !S.paused;
+    if (S.source.video) S.paused ? S.source.video.pause() : S.source.video.play();
+    $('btnPause').textContent = S.paused ? 'Resume' : 'Pause';
+    $('hPaused').classList.toggle('hidden', !S.paused);
+  };
+  $('btnStop').onclick = () => { stop(); $('placeholder').textContent = 'Disconnected.'; $('placeholder').classList.remove('hidden'); };
+  $('btnFull').onclick = () => (document.fullscreenElement ? document.exitFullscreen() : $('stageWrap').requestFullscreen());
+  document.addEventListener('change', saveSettings);
+  document.addEventListener('click', (e) => { if (e.target.closest('.seg')) saveSettings(); });
+  bindExports();
+}
+
+loadSettings();
+bindUi();
+getLut();
+loop();
+if (SERVED) {
+  $('proxyNote').textContent = 'Served by VisionAI: cameras without CORS go through the local proxy.';
+  status('Loading YOLO26n…');
+  loadModelFrom(fetchBytes('/api/yolo/model'));
+} else {
+  status('Choose the model file', 'error');
+  $('modelPick').classList.remove('hidden');
+  $('placeholder').textContent = 'Choose yolo26n.onnx on the right (one time per visit), then connect a camera.';
+  $('proxyNote').textContent = 'Opened from disk: only cameras that allow cross-origin access work (the Keelung camera does).';
+}
+</script>
+</body>
+</html>
