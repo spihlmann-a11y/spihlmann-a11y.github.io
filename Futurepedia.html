@@ -1,0 +1,2736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="artifact-type" content="dashboard">
+  <meta name="design-style" content="briefing">
+  <title>2026 AI Stack, Agents & Techniques Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@1.43.0/dist/umd/lucide.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+
+      /* Page and surfaces: warm stone-white paper */
+      --background: #faf9f5;
+      --surface-container-low: #ffffff;
+      --surface-container: #f1efe8;
+      --surface-container-high: #e6e2d6;
+
+      /* Ink */
+      --on-surface: #17181a;
+      --on-surface-variant: #56585c;
+
+      /* Rules */
+      --outline: #17181a;
+      --outline-variant: #dedad0;
+      --border-strong: #c8c4b8;
+
+      /* Accents */
+      --primary: #17181a;
+      --on-primary: #faf9f5;
+      --primary-container: #f2b705;
+      --on-primary-container: #17181a;
+      --secondary: #1f4e5f;
+      --secondary-soft: #e9f1f4;
+      --tertiary: #785008;
+      --tag-bg: #f5e6c4;
+      --error: #b42318;
+      --on-error: #ffffff;
+      --error-soft: #fdf2f2;
+
+      /* Data series, in order of use */
+      --data-1: #1f4e5f;
+      --data-2: #d99000;
+      --data-3: #2b6e52;
+      --data-4: #b84a39;
+      --data-context: #c4bfb2;
+
+      /* Fonts */
+      --font-headline: 'Source Serif 4', serif;
+      --font-body: 'Plus Jakarta Sans', sans-serif;
+      --font-label: 'Geist Mono', monospace;
+
+      /* Shape */
+      --rounded: 0.25rem;
+      --rounded-lg: 0.375rem;
+      --rounded-full: 0.25rem;
+
+      /* Style effects */
+      --section-rule: 1.5px solid var(--outline);
+      --card-border: 1px solid var(--outline-variant);
+      --card-border-active: 1px solid var(--secondary);
+      --badge-radius: 2px;
+      --heading-tracking: -0.02em;
+      --label-tracking: 0.08em;
+      --shadow-subtle: 0 2px 8px rgb(23 24 26 / 0.06);
+
+      /* Shared tokens */
+      --positive: #2b6e52;
+      --positive-soft: #edf7f2;
+      --warning: #d99000;
+      --focus: #1f4e5f;
+
+      /* Dashboard type scale */
+      --display-size: clamp(1.85rem, 1.4rem + 1.35vw, 2.5rem);
+      --headline-size: clamp(1.25rem, 1.1rem + 0.5vw, 1.55rem);
+      --subhead-size: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem);
+      --body-size: clamp(0.9375rem, 0.9rem + 0.15vw, 1rem);
+      --label-size: 0.75rem;
+
+      /* Spacing scale */
+      --space-xs: 0.25rem;
+      --space-sm: 0.5rem;
+      --space-md: 1rem;
+      --space-lg: 1.5rem;
+      --space-xl: 2.5rem;
+      --space-2xl: 4rem;
+      --space-3xl: 6rem;
+
+      /* Motion */
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+      --dur-micro: 120ms;
+      --dur-short: 220ms;
+      --dur-long: 420ms;
+    }
+
+    /* Base reset */
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      overflow-x: clip;
+      margin: 0;
+      padding: 0;
+      background-color: var(--background);
+      color: var(--on-surface);
+      font-family: var(--font-body);
+      font-size: var(--body-size);
+      line-height: 1.58;
+      -webkit-font-smoothing: antialiased;
+    }
+    header { position: static !important; }
+
+    .page-grid {
+      display: grid;
+      gap: var(--space-xl);
+      padding: var(--space-lg);
+      max-width: 1200px;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+    .page-grid * { min-width: 0; }
+
+    /* Focus rings */
+    :focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    /* Typography & Dossier Bar */
+    .dossier-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-sm);
+      border-bottom: var(--section-rule);
+      padding-bottom: var(--space-sm);
+      margin-bottom: var(--space-md);
+    }
+    .dossier-bar-left {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+    .dossier-pill {
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      font-family: var(--font-body);
+      font-weight: 700;
+      font-size: 0.6875rem;
+      letter-spacing: var(--label-tracking);
+      text-transform: uppercase;
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--badge-radius);
+      display: inline-block;
+    }
+    .dossier-meta {
+      font-family: var(--font-label);
+      font-size: var(--label-size);
+      color: var(--on-surface-variant);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .dossier-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+      align-items: center;
+    }
+    .nav-jump {
+      font-family: var(--font-label);
+      font-size: var(--label-size);
+      color: var(--secondary);
+      text-decoration: none;
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--rounded);
+      transition: background-color var(--dur-micro) var(--ease-out);
+      cursor: pointer;
+      background: transparent;
+      border: 0;
+    }
+    .nav-jump:hover {
+      background-color: var(--surface-container);
+      text-decoration: underline;
+    }
+
+    .title {
+      font-family: var(--font-headline);
+      font-size: var(--display-size);
+      font-weight: 600;
+      letter-spacing: var(--heading-tracking);
+      line-height: 1.08;
+      color: var(--on-surface);
+      margin: 0;
+    }
+    .standfirst {
+      font-family: var(--font-body);
+      font-size: var(--subhead-size);
+      font-weight: 600;
+      color: var(--secondary);
+      margin: var(--space-sm) 0 0;
+      max-width: 68ch;
+      line-height: 1.45;
+    }
+    .hero-lede {
+      color: var(--on-surface-variant);
+      margin: var(--space-sm) 0 0;
+      max-width: 72ch;
+    }
+
+    .section-heading {
+      font-family: var(--font-headline);
+      font-size: var(--headline-size);
+      font-weight: 600;
+      letter-spacing: var(--heading-tracking);
+      line-height: 1.15;
+      margin: 0;
+      color: var(--on-surface);
+    }
+    .section-sub {
+      color: var(--secondary);
+      font-weight: 600;
+      margin: var(--space-xs) 0 0;
+      font-size: var(--body-size);
+    }
+
+    .index-num {
+      font-family: var(--font-label);
+      font-weight: 600;
+      font-size: var(--label-size);
+      color: var(--secondary);
+      background: var(--surface-container);
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--badge-radius);
+    }
+
+    /* KPI Strip */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+      gap: var(--space-md);
+      margin-top: var(--space-lg);
+    }
+    .figure-card {
+      background: var(--surface-container-low);
+      border: var(--card-border);
+      border-radius: var(--rounded-lg);
+      padding: var(--space-md) var(--space-lg);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+    }
+    .figure-card.highlight {
+      border-top: 3px solid var(--primary-container);
+    }
+    .figure-label {
+      font-family: var(--font-label);
+      font-size: var(--label-size);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--on-surface-variant);
+    }
+    .figure-value {
+      font-family: var(--font-headline);
+      font-size: 2rem;
+      font-weight: 600;
+      line-height: 1.1;
+      font-variant-numeric: lining-nums tabular-nums;
+      color: var(--on-surface);
+    }
+    .figure-note {
+      font-size: 0.8125rem;
+      color: var(--on-surface-variant);
+    }
+
+    /* Buttons & Inputs */
+    button, input, select, textarea {
+      font-family: inherit;
+      font-size: inherit;
+      color: var(--on-surface);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-sm);
+      min-height: 44px;
+      padding: var(--space-sm) var(--space-md);
+      border-radius: var(--rounded);
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: background-color var(--dur-micro) var(--ease-out), box-shadow var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out);
+      text-decoration: none;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: var(--on-primary);
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: var(--secondary);
+    }
+    .btn-secondary {
+      background: var(--surface-container-low);
+      border-color: var(--border-strong);
+      color: var(--on-surface);
+    }
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--surface-container);
+    }
+    .btn-gold {
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      border-color: var(--primary-container);
+    }
+    .btn-gold:hover:not(:disabled) {
+      box-shadow: var(--shadow-subtle);
+      background: var(--surface-container-high);
+    }
+    .btn-sm {
+      min-height: 36px;
+      padding: var(--space-xs) var(--space-sm);
+      font-size: 0.8125rem;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+    }
+    .field-label {
+      font-family: var(--font-label);
+      font-size: var(--label-size);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--on-surface-variant);
+    }
+    .input-control, .select-control, .textarea-control {
+      background: var(--surface-container-low);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--rounded);
+      padding: var(--space-sm) var(--space-md);
+      min-height: 44px;
+      color: var(--on-surface);
+      width: 100%;
+      transition: box-shadow var(--dur-micro) var(--ease-out), background-color var(--dur-micro) var(--ease-out);
+    }
+    .select-control {
+      padding-right: var(--space-xl);
+    }
+    .textarea-control {
+      min-height: 96px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+    .input-control:focus, .select-control:focus, .textarea-control:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--focus);
+    }
+
+    /* Filter Chips */
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+      align-items: center;
+    }
+    .chip-btn {
+      min-height: 36px;
+      padding: var(--space-xs) var(--space-md);
+      border-radius: var(--rounded);
+      border: 1px solid var(--outline-variant);
+      background: var(--surface-container-low);
+      color: var(--on-surface-variant);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out);
+    }
+    .chip-btn:hover {
+      background: var(--surface-container);
+      color: var(--on-surface);
+    }
+    .chip-btn.active {
+      background: var(--primary);
+      color: var(--on-primary);
+      border-color: var(--primary);
+    }
+
+    /* Tags */
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-xs);
+      font-family: var(--font-label);
+      font-size: 0.72rem;
+      font-weight: 500;
+      padding: 0.15rem 0.45rem;
+      border-radius: var(--rounded);
+      background: var(--tag-bg);
+      color: var(--tertiary);
+    }
+    .tag-slate {
+      background: var(--secondary-soft);
+      color: var(--secondary);
+    }
+    .tag-positive {
+      background: var(--positive-soft);
+      color: var(--positive);
+    }
+    .tag-gold {
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      font-weight: 700;
+    }
+
+    /* Section 1: Ecosystem Matrix & Recommender */
+    .recommender-bar {
+      background: var(--surface-container);
+      border-top: var(--section-rule);
+      padding: var(--space-md) var(--space-lg);
+      border-radius: 0 0 var(--rounded-lg) var(--rounded-lg);
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+      gap: var(--space-md);
+      align-items: end;
+      margin-bottom: var(--space-md);
+    }
+    .recommendation-banner {
+      background: var(--surface-container-low);
+      border: var(--card-border);
+      border-left: 4px solid var(--primary-container);
+      border-radius: var(--rounded-lg);
+      padding: var(--space-md) var(--space-lg);
+      margin-bottom: var(--space-md);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--space-md);
+    }
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--surface-container-low);
+      border: var(--card-border);
+      border-radius: var(--rounded-lg);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+    thead th {
+      font-family: var(--font-label);
+      font-size: var(--label-size);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--on-surface-variant);
+      background: var(--surface-container);
+      padding: var(--space-md);
+      border-bottom: var(--section-rule);
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: var(--space-md);
+      border-bottom: 1px solid var(--outline-variant);
+      vertical-align: top;
+    }
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+    .col-highlight {
+      background-color: var(--secondary-soft);
+    }
+    thead th.col-highlight {
+      background-color: var(--primary-container);
+      color: var(--on-primary-container);
+    }
+
+    /* Section 2: Master-Detail Directory */
+    .controls-panel {
+      background: var(--surface-container-low);
+      border: var(--card-border);
+      border-radius: var(--rounded-lg);
+      padding: var(--space-md) var(--space-lg);
+      display: grid;
+      gap: var(--space-md);
+    }
+    .controls-top {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+      gap: var(--space-md);
+      align-items: end;
+    }
+    .explorer-split {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+      gap: var(--space-lg);
+      align-items: start;
+      margin-top: var(--space-md);
+    }
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+      gap: var(--space-md);
+    }
+    .tool-card {
+      background: var(--surface-container-low);
+      border: var(--card-border);
+      border-radius: var(--rounded-lg);
+      padding: var(--space-md);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: var(--space-sm);
+      cursor: pointer;
+      transition: box-shadow var(--dur-micro) var(--ease-out), background-color var(--dur-micro) var(--ease-out);
+      text-align: left;
+    }
+    .tool-card:hover {
+      box-shadow: var(--shadow-subtle);
+      background: var(--surface-container);
+    }
+    .tool-card.selected {
+      box-shadow: 0 0 0 2px var(--secondary);
+      background: var(--surface-container-low);
+    }
+    .tool-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: var(--space-sm);
+    }
+    .tool-name {
+      font-family: var(--font-headline);
+      font-weight: 600;
+      font-size: 1.125rem;
+      margin: 0;
+      color: var(--on-surface);
+    }
+    .tool-summary {
+      font-size: 0.875rem;
+      color: var(--on-surface-variant);
+      margin: 0;
+      line-height: 1.48;
+    }
+    .tool-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--space-sm);
+      padding-top: var(--space-xs);
+      border-top: 1px solid var(--outline-variant);
+      margin-top: auto;
+    }
+
+    /* Inspector Panel */
+    .inspector-panel {
+      background: var(--surface-container-low);
+      border: var(--card-border);
+      border-top: 3px solid var(--secondary);
+      border-radius: var(--rounded-lg);
+      padding: var(--space-lg);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+    }
+    .inspector-box {
+      background: var(--surface-container);
+      padding: var(--space-md);
+      border-radius: var(--rounded);
+    }
+    .inspector-box.caveat {
+      background: var(--error-soft);
+      border-left: 3px solid var(--error);
+    }
+    .inspector-label {
+      font-family: var(--font-label);
+      font-size: var(--label-size);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--secondary);
+      margin-bottom: var(--space-xs);
+      display: block;
+    }
+    .inspector-box.caveat .inspector-label {
+      color: var(--error);
+    }
+
+    /* Section 3: Charts + Skills */
+    .analytics-skills-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+      gap: var(--space-lg);
+      align-items: start;
+    }
+    .chart-card {
+      background: var(--surface-container-low);
+      border: var(--card-border);
+      border-radius: var(--rounded-lg);
+      padding: var(--space-lg);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+    }
+    .chart-container {
+      position: relative;
+      min-height: 330px;
+      width: 100%;
+    }
+    .skills-list {
+      display: grid;
+      gap: var(--space-sm);
+    }
+    .skill-row {
+      background: var(--surface-container-low);
+      border: var(--card-border);
+      border-radius: var(--rounded-lg);
+      padding: var(--space-md);
+      display: grid;
+      gap: var(--space-xs);
+    }
+    .skill-row-top {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+    .skill-cmd {
+      font-family: var(--font-label);
+      font-size: 0.78rem;
+      background: var(--surface-container);
+      padding: 0.15rem 0.45rem;
+      border-radius: var(--rounded);
+      color: var(--on-surface);
+    }
+
+    /* Section 4: Techniques Workbench & 7 Levels */
+    .workbench-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+      gap: var(--space-lg);
+      align-items: start;
+    }
+    .workbench-card {
+      background: var(--surface-container-low);
+      border: var(--card-border);
+      border-radius: var(--rounded-lg);
+      padding: var(--space-lg);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+    }
+    .prompt-output {
+      background: var(--surface-container);
+      border: 1px solid var(--outline-variant);
+      border-radius: var(--rounded);
+      padding: var(--space-md);
+      font-family: var(--font-label);
+      font-size: 0.8125rem;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      color: var(--on-surface);
+    }
+    .levels-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+      gap: var(--space-xs);
+    }
+    .level-step {
+      background: var(--surface-container-low);
+      border: var(--card-border);
+      border-radius: var(--rounded);
+      padding: var(--space-sm);
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+      min-height: 44px;
+      transition: background-color var(--dur-micro) var(--ease-out);
+    }
+    .level-step:hover {
+      background: var(--surface-container);
+    }
+    .level-step.active {
+      background: var(--primary);
+      color: var(--on-primary);
+      border-color: var(--primary);
+    }
+    .level-step.active .level-num {
+      color: var(--primary-container);
+    }
+    .level-num {
+      font-family: var(--font-label);
+      font-size: var(--label-size);
+      font-weight: 600;
+      color: var(--secondary);
+    }
+
+    /* Section 5: Saved Stack & Brief */
+    .stack-panel {
+      background: var(--surface-container-low);
+      border: var(--card-border);
+      border-top: 3px solid var(--primary-container);
+      border-radius: var(--rounded-lg);
+      padding: var(--space-lg);
+      display: grid;
+      gap: var(--space-md);
+    }
+    .stack-items-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+      gap: var(--space-sm);
+    }
+    .stack-pill-card {
+      background: var(--surface-container);
+      border: 1px solid var(--outline-variant);
+      border-radius: var(--rounded);
+      padding: var(--space-sm) var(--space-md);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+    .empty-state {
+      background: var(--surface-container);
+      border: 1px dashed var(--border-strong);
+      border-radius: var(--rounded);
+      padding: var(--space-lg);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+      align-items: flex-start;
+    }
+
+    /* Footer */
+    .sources-footer {
+      border-top: var(--section-rule);
+      padding-top: var(--space-lg);
+      padding-bottom: var(--space-xl);
+      color: var(--on-surface-variant);
+      font-size: 0.875rem;
+    }
+
+    .status-msg {
+      font-family: var(--font-label);
+      font-size: var(--label-size);
+      color: var(--positive);
+      min-height: 1.2em;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 960px) {
+      .controls-top {
+        grid-template-columns: 1fr 1fr;
+      }
+      .explorer-split,
+      .analytics-skills-grid,
+      .workbench-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 640px) {
+      .page-grid {
+        padding: var(--space-md);
+        gap: var(--space-lg);
+      }
+      .controls-top {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-grid">
+
+    <!-- Header & KPI Strip -->
+    <header>
+      <div class="dossier-bar">
+        <div class="dossier-bar-left">
+          <span class="dossier-pill">AI Field Dossier</span>
+          <span class="dossier-meta">2026 Toolkit · Ecosystems · Agents · Skills · Techniques</span>
+        </div>
+        <nav class="dossier-nav" aria-label="Section navigation">
+          <button type="button" class="nav-jump" onclick="scrollToSection('sec-ecosystems')">01 Ecosystems</button>
+          <button type="button" class="nav-jump" onclick="scrollToSection('sec-directory')">02 Tools &amp; Agents</button>
+          <button type="button" class="nav-jump" onclick="scrollToSection('sec-skills')">03 Models &amp; Skills</button>
+          <button type="button" class="nav-jump" onclick="scrollToSection('sec-techniques')">04 Techniques</button>
+          <button type="button" class="nav-jump" onclick="scrollToSection('sec-stack')">05 My Stack (<span id="nav-stack-count">0</span>)</button>
+        </nav>
+      </div>
+
+      <h1 class="title">2026 AI Tools, Agents &amp; Techniques Explorer</h1>
+      <p class="standfirst">Go deep into one primary ecosystem for 90% of your leverage—then pair it with grounded verification, agentic workflows, and specialized creative tools for the remaining 10%.</p>
+      <p class="hero-lede">An interactive reference synthesizing 18 practical workflows across OpenAI, Anthropic, Google, and open-source agent ecosystems: compare platforms side-by-side, inspect real-world caveats, installable skills, and copy-ready anti-hallucination prompts.</p>
+
+      <div class="kpi-grid">
+        <div class="figure-card highlight">
+          <span class="figure-label">Tools &amp; Models Indexed</span>
+          <span class="figure-value" id="kpi-total-tools">0</span>
+          <span class="figure-note">Ecosystems, agents, labs &amp; media models</span>
+        </div>
+        <div class="figure-card">
+          <span class="figure-label">Agent Skills &amp; Plugins</span>
+          <span class="figure-value" id="kpi-total-skills">0</span>
+          <span class="figure-note">Reusable workflow recipes &amp; scanners</span>
+        </div>
+        <div class="figure-card">
+          <span class="figure-label">Time-Saving Target</span>
+          <span class="figure-value">~20 hrs/wk</span>
+          <span class="figure-note">1,000 hrs/yr across routine workflows</span>
+        </div>
+        <div class="figure-card">
+          <span class="figure-label">Saved in Your Stack</span>
+          <span class="figure-value" id="kpi-saved-count">0</span>
+          <span class="figure-note" id="kpi-level-note">Self-assessed: Level 1</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Section 01: Ecosystem Architecture & Recommender -->
+    <section id="sec-ecosystems" aria-labelledby="heading-ecosystems">
+      <div class="dossier-bar">
+        <div class="dossier-bar-left">
+          <span class="index-num">01</span>
+          <span class="dossier-meta">Primary Platform Architecture</span>
+        </div>
+        <span class="dossier-meta">Parallel Capabilities Across Ecosystems</span>
+      </div>
+      <h2 class="section-heading" id="heading-ecosystems">Pick One Ecosystem &amp; Go Deep</h2>
+      <p class="section-sub">Constantly switching tools at a shallow level hurts results; every major platform shares parallel layers for context, repeatability, building, and agents.</p>
+
+      <div class="recommender-bar" style="margin-top: var(--space-md);">
+        <div class="field-group">
+          <label class="field-label" for="rec-goal">Primary Priority</label>
+          <select id="rec-goal" class="select-control" onchange="updateRecommendation()">
+            <option value="writing">Writing, Hooks, Coding &amp; Brand Design</option>
+            <option value="allinone">Broadest All-in-One, Image Gen &amp; Business Ops</option>
+            <option value="research">Research, Learning &amp; Google Workspace</option>
+            <option value="automation">Complex Backend Agent Workflows</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="rec-comfort">Technical Comfort</label>
+          <select id="rec-comfort" class="select-control" onchange="updateRecommendation()">
+            <option value="nontech">Non-Technical / Natural Language Only</option>
+            <option value="builder">Vibe Coder (Iterate via Prompts &amp; Specs)</option>
+            <option value="technical">Comfortable with APIs, JSON &amp; Self-Hosting</option>
+          </select>
+        </div>
+        <button type="button" class="btn btn-primary" onclick="applyRecommendedStack()">Load Recommended Preset</button>
+      </div>
+
+      <div class="recommendation-banner" id="recommendation-output">
+        <div>
+          <span class="tag tag-gold" id="rec-badge">Recommended Primary: Claude</span>
+          <p style="margin: var(--space-xs) 0 0; font-weight: 600;" id="rec-title">Claude Ecosystem + Claude Code &amp; Design</p>
+          <p style="margin: var(--space-xs) 0 0; color: var(--on-surface-variant); font-size: 0.9rem;" id="rec-reason"></p>
+        </div>
+        <div class="chip-row" id="rec-chips"></div>
+      </div>
+
+      <div class="table-wrap">
+        <table aria-label="Ecosystem feature comparison">
+          <thead>
+            <tr>
+              <th>Capability Layer</th>
+              <th id="th-chatgpt">ChatGPT (OpenAI)</th>
+              <th id="th-claude">Claude (Anthropic)</th>
+              <th id="th-gemini">Gemini (Google)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Persistent Knowledge</strong><br><span style="color:var(--on-surface-variant);font-size:0.8rem;">Employee handbook &amp; SOPs</span></td>
+              <td class="col-chatgpt"><strong>Projects</strong> — Dedicated workspaces with custom instructions and reference files.</td>
+              <td class="col-claude"><strong>Projects</strong> — Workspace instructions, cross-chat project memory, and uploaded knowledge files.</td>
+              <td class="col-gemini"><strong>NotebookLM &amp; Notebooks</strong> — Grounded RAG up to 50 free sources; attaches directly into Gemini chats.</td>
+            </tr>
+            <tr>
+              <td><strong>Reusable Processes</strong><br><span style="color:var(--on-surface-variant);font-size:0.8rem;">Recipe cards for tasks</span></td>
+              <td class="col-chatgpt"><strong>Custom GPTs &amp; Skills</strong> — Repeatable workflows and packaged skills inside Work.</td>
+              <td class="col-claude"><strong>Skills</strong> — Instruction folders invoked automatically across Chat, Cowork, and Code.</td>
+              <td class="col-gemini"><strong>Gems</strong> — Specialized brains (traditional, Opal-based on paid, or NotebookLM-backed).</td>
+            </tr>
+            <tr>
+              <td><strong>Inline Building Mode</strong><br><span style="color:var(--on-surface-variant);font-size:0.8rem;">Side-panel live creation</span></td>
+              <td class="col-chatgpt"><strong>Canvas &amp; Blocks</strong> — Editable writing blocks, live Gmail send, interactive code blocks &amp; charts.</td>
+              <td class="col-claude"><strong>Artifacts &amp; Claude Design</strong> — Shareable web tools, Design Systems, slides, and MP4 motion graphics.</td>
+              <td class="col-gemini"><strong>Canvas &amp; Google Labs</strong> — Side-by-side doc/app editing plus Stitch UI and Pomelli marketing kits.</td>
+            </tr>
+            <tr>
+              <td><strong>Agentic &amp; Vibe Coding</strong><br><span style="color:var(--on-surface-variant);font-size:0.8rem;">Autonomous execution</span></td>
+              <td class="col-chatgpt"><strong>Work, Codex &amp; DOTS</strong> — Local files, scheduled tasks, live Sites (`chatgpt.site`), always-on DOTS orchestrator.</td>
+              <td class="col-claude"><strong>Cowork &amp; Claude Code</strong> — Desktop file automation (Cowork) and self-testing app builder (Code).</td>
+              <td class="col-gemini"><strong>AI Studio, Opal &amp; Antigravity</strong> — Free vibe coding, node workflows with agent steps, and code agent.</td>
+            </tr>
+            <tr>
+              <td><strong>Standout Edge</strong><br><span style="color:var(--on-surface-variant);font-size:0.8rem;">Where it leads</span></td>
+              <td class="col-chatgpt">Broadest all-in-one suite, GPT Image 2.5 research-to-visuals, generous Codex usage limits.</td>
+              <td class="col-claude">Most natural prose, hooks &amp; critiques; strongest design/code fidelity via Plan Mode.</td>
+              <td class="col-gemini">Native YouTube &amp; Workspace integration, Veo 3.1/Nano Banana, free NotebookLM citation engine.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 02: Searchable Tools & Agents Directory -->
+    <section id="sec-directory" aria-labelledby="heading-directory">
+      <div class="dossier-bar">
+        <div class="dossier-bar-left">
+          <span class="index-num">02</span>
+          <span class="dossier-meta">Master-Detail Catalog</span>
+        </div>
+        <span class="dossier-meta" id="dir-match-count">Showing all entries</span>
+      </div>
+      <h2 class="section-heading" id="heading-directory">AI Tools, Agents &amp; Models Directory</h2>
+      <p class="section-sub">Filter by category or access tier, then select any card to inspect real workflows and known limitations from the source tests.</p>
+
+      <div class="controls-panel" style="margin-top: var(--space-md);">
+        <div class="controls-top">
+          <div class="field-group">
+            <label class="field-label" for="search-tools">Search tools, agents, or use cases</label>
+            <input type="text" id="search-tools" class="input-control" placeholder="e.g. YouTube, Blender, Vibe coding, Gmail, RAG…" oninput="renderTools()">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="filter-access">Access / Pricing Tier</label>
+            <select id="filter-access" class="select-control" onchange="renderTools()">
+              <option value="all">All Access Tiers</option>
+              <option value="free">Free / Generous Free Plan</option>
+              <option value="paid">Paid Plan / API Credits</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="sort-tools">Sort Directory</label>
+            <select id="sort-tools" class="select-control" onchange="renderTools()">
+              <option value="category">By Category</option>
+              <option value="name">Alphabetical (A–Z)</option>
+              <option value="lift">Lowest Technical Lift First</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <span class="field-label">Display</span>
+            <button type="button" class="btn btn-secondary" id="toggle-view-btn" onclick="toggleDirectoryView()">Table View</button>
+          </div>
+        </div>
+
+        <div class="chip-row" id="category-chips" role="group" aria-label="Filter by category"></div>
+      </div>
+
+      <div class="explorer-split">
+        <div id="directory-list-container"></div>
+
+        <aside class="inspector-panel" id="tool-inspector" aria-live="polite">
+          <div class="dossier-bar" style="margin-bottom: 0;">
+            <span class="dossier-pill">Inspector Dossier</span>
+            <span class="dossier-meta" id="ins-category">—</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:var(--space-sm);">
+            <div>
+              <h3 class="section-heading" id="ins-name" style="margin-bottom: var(--space-xs);">Select a tool</h3>
+              <div class="chip-row" id="ins-tags"></div>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" id="ins-save-btn" onclick="toggleSaveCurrentTool()">+ Save to Stack</button>
+          </div>
+          <p id="ins-desc" style="margin:0;"></p>
+          <div class="inspector-box">
+            <span class="inspector-label">Tested Real-World Workflow</span>
+            <p id="ins-workflow" style="margin:0; font-size:0.9rem;"></p>
+          </div>
+          <div class="inspector-box caveat">
+            <span class="inspector-label">Caveats &amp; Practical Limits</span>
+            <p id="ins-caveat" style="margin:0; font-size:0.9rem;"></p>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.82rem; color:var(--on-surface-variant);">
+            <span>Location / Entry: <strong id="ins-location" style="color:var(--on-surface);">—</strong></span>
+            <span>Technical Lift: <strong id="ins-lift" style="color:var(--on-surface);">—</strong></span>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Section 03: Grounded Benchmarks & Agent Skills -->
+    <section id="sec-skills" aria-labelledby="heading-skills">
+      <div class="dossier-bar">
+        <div class="dossier-bar-left">
+          <span class="index-num">03</span>
+          <span class="dossier-meta">Empirical Tests &amp; Reusable Skills</span>
+        </div>
+        <span class="dossier-meta">Installable Recipe Cards</span>
+      </div>
+      <h2 class="section-heading" id="heading-skills">Model Benchmarks &amp; Agent Skills Registry</h2>
+      <p class="section-sub">Switch between empirical survey/test datasets on the left, or browse free GitHub agent skills and security inspectors on the right.</p>
+
+      <div class="analytics-skills-grid" style="margin-top: var(--space-md);">
+        <div class="chart-card">
+          <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:var(--space-sm);">
+            <div>
+              <h3 class="section-heading" id="chart-title" style="font-size:1.15rem;">Why Grounding Matters: Public LLM Survey</h3>
+              <p class="figure-note" id="chart-subtitle" style="margin:var(--space-xs) 0 0;">Share of respondents believing how AI answers a question (%)</p>
+            </div>
+            <div class="chip-row">
+              <button type="button" class="chip-btn active" id="chart-btn-survey" onclick="switchChart('survey')">LLM Survey</button>
+              <button type="button" class="chip-btn" id="chart-btn-video" onclick="switchChart('video')">Video Tiers</button>
+              <button type="button" class="chip-btn" id="chart-btn-aeo" onclick="switchChart('aeo')">AEO Citations</button>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="benchmarkChart"></canvas>
+          </div>
+          <p id="chart-takeaway" style="margin:0; font-size:0.875rem; color:var(--on-surface-variant); border-top:1px solid var(--outline-variant); padding-top:var(--space-sm);"></p>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:var(--space-sm);">
+          <div class="field-group">
+            <label class="field-label" for="filter-skills">Filter Agent Skills &amp; Playbooks</label>
+            <input type="text" id="filter-skills" class="input-control" placeholder="Search skills (e.g. Remotion, Humanizer, Nvidia, Impeccable)…" oninput="renderSkills()">
+          </div>
+          <div class="skills-list" id="skills-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 04: Techniques Workbench & 7-Level Maturity -->
+    <section id="sec-techniques" aria-labelledby="heading-techniques">
+      <div class="dossier-bar">
+        <div class="dossier-bar-left">
+          <span class="index-num">04</span>
+          <span class="dossier-meta">Execution Frameworks</span>
+        </div>
+        <span class="dossier-meta">Prompting · Grounding · Verification · AEO</span>
+      </div>
+      <h2 class="section-heading" id="heading-techniques">Prompting, Anti-Hallucination &amp; Maturity Playbook</h2>
+      <p class="section-sub">Interactive prompt generators and verification checklists distilled from research and production testing.</p>
+
+      <div class="workbench-grid" style="margin-top: var(--space-md);">
+        <!-- Left: Technique Workbench -->
+        <div class="workbench-card">
+          <div class="chip-row" id="tech-tabs" role="group" aria-label="Select technique">
+            <button type="button" class="chip-btn active" onclick="selectTechnique('icc', this)">ICC + Context Interview</button>
+            <button type="button" class="chip-btn" onclick="selectTechnique('grounding', this)">3-Step RCEO Grounding</button>
+            <button type="button" class="chip-btn" onclick="selectTechnique('verification', this)">Anti-Hallucination Stack</button>
+            <button type="button" class="chip-btn" onclick="selectTechnique('notebook_audit', this)">Source Audit Prompts</button>
+            <button type="button" class="chip-btn" onclick="selectTechnique('aeo', this)">AEO Playbook</button>
+          </div>
+
+          <div id="tech-body"></div>
+        </div>
+
+        <!-- Right: 7 Levels of AI User -->
+        <div class="workbench-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:var(--space-sm);">
+            <div>
+              <h3 class="section-heading" style="font-size:1.15rem;">The 7 Levels of AI User</h3>
+              <p class="figure-note" style="margin:var(--space-xs) 0 0;">Click any level to inspect its unlock condition and mark your current stage.</p>
+            </div>
+          </div>
+
+          <div class="levels-grid" id="levels-grid"></div>
+
+          <div class="inspector-box" id="level-detail">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:var(--space-sm); margin-bottom:var(--space-xs);">
+              <span class="tag tag-gold" id="lvl-badge">Level 1</span>
+              <button type="button" class="btn btn-secondary btn-sm" id="lvl-mark-btn" onclick="markCurrentLevel()">Set as My Level</button>
+            </div>
+            <h4 style="margin:0 0 var(--space-xs); font-family:var(--font-headline); font-size:1.1rem;" id="lvl-title">Basic Chat</h4>
+            <p style="margin:0 0 var(--space-sm); font-size:0.9rem;" id="lvl-desc"></p>
+            <span class="inspector-label">Action to Level Up Today</span>
+            <p style="margin:0; font-size:0.875rem; color:var(--on-surface);" id="lvl-action"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 05: Persisted Personal Stack & Export -->
+    <section id="sec-stack" aria-labelledby="heading-stack">
+      <div class="dossier-bar">
+        <div class="dossier-bar-left">
+          <span class="index-num">05</span>
+          <span class="dossier-meta">Persisted Workspace</span>
+        </div>
+        <span class="dossier-meta">Saved Automatically</span>
+      </div>
+      <h2 class="section-heading" id="heading-stack">My AI Stack &amp; Implementation Plan</h2>
+      <p class="section-sub">Bookmark tools and skills from Sections 02–03, jot down workflows to automate this week, and export your brief.</p>
+
+      <div class="stack-panel" style="margin-top: var(--space-md);">
+        <div id="stack-items-container"></div>
+
+        <div class="field-group">
+          <label class="field-label" for="stack-notes">Implementation Notes (Subtasks to streamline or build first)</label>
+          <textarea id="stack-notes" class="textarea-control" placeholder="List repetitive daily tasks to turn into a Project, Skill, Zapier automation, or Claude Code / AI Studio tool…" oninput="handleNotesChange(this.value)"></textarea>
+        </div>
+
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:var(--space-md);">
+          <div class="chip-row">
+            <button type="button" class="btn btn-primary" onclick="exportStackBrief()">Download Stack Brief (.txt)</button>
+            <button type="button" class="btn btn-secondary" onclick="loadStarterPreset('creator')">Preset: Creator Stack</button>
+            <button type="button" class="btn btn-secondary" onclick="loadStarterPreset('ops')">Preset: Business Ops</button>
+            <button type="button" class="btn btn-secondary" onclick="resetSavedData(this)">Reset Saved Data</button>
+          </div>
+          <span class="status-msg" id="stack-status" aria-live="polite"></span>
+        </div>
+      </div>
+    </section>
+
+    <footer class="sources-footer">
+      <strong>Sources &amp; Grounding:</strong> Content, benchmarks, and workflows are synthesized from 18 Futurepedia 2025–2026 deep-dive transcripts covering Google AI Studio &amp; Labs (Opal, Pomelli, Stitch, Flow), NotebookLM &amp; Gemini integration, Claude Chat/Cowork/Code/Design, ChatGPT Work/Codex/DOTS, GPT Image 2.0 &amp; 2.5 (Flare/Sunburst), AI video generator comparisons (Veo 3.1, Sora 2, Kling 2.6/3.0, Grok Imagine), Zapier vs. n8n, Manus, OpenClaw, HubSpot AEO, Agent Skills, and anti-hallucination research.
+    </footer>
+  </div>
+
+  <api-shim></api-shim>
+  <script>
+    // =========================================================================
+    // DATA CATALOG (All strings use backticks for safe escaping)
+    // =========================================================================
+    const TOOLS_DATA = [
+      {
+        id: `chatgpt-work`,
+        name: `ChatGPT Work & Sites`,
+        category: `Ecosystems & Modes`,
+        access: `paid`,
+        accessLabel: `Paid Plan (Desktop/Web/Mobile)`,
+        lift: 1,
+        liftLabel: `Low (No Code)`,
+        location: `ChatGPT Desktop / Web Work Tab`,
+        tags: [`Agentic`, `Local Files`, `Hosted Sites`],
+        summary: `Shifts ChatGPT from conversational Q&A to an autonomous worker with its own cloud computer, local folder access (desktop), scheduled tasks, plugins, and live hosted websites.`,
+        workflow: `Pointed at a messy local folder ("The Context Window" cafe) containing CSVs, invoices, and sales logs: Work created 11 organized folders, compiled a master spreadsheet, built a dark-mode owner dashboard on chatgpt.site, and scheduled a 6:00 a.m. daily refresh—plus used the in-app browser cursor to send a Drive link via Gmail when a connector failed.`,
+        caveat: `Scheduled tasks on local folders only execute while your computer is powered on; long autonomous runs can take 10–14+ minutes.`
+      },
+      {
+        id: `chatgpt-dots`,
+        name: `OpenAI DOTS`,
+        category: `Agents & Automation`,
+        access: `paid`,
+        accessLabel: `Early Access / ChatGPT`,
+        lift: 1,
+        liftLabel: `Low (Conversational)`,
+        location: `ChatGPT`,
+        tags: [`Proactive`, `Orchestrator`, `Continuity`],
+        summary: `An always-on proactive personal assistant that sits across your entire ChatGPT account—memories, connected tools, skills, scheduled tasks, Work, and Codex sessions.`,
+        workflow: `Acts as a central bridge across ongoing projects (videos, email, files, research, follow-ups), proactively surfacing suggestions and spinning up new Chat, Work, or local Codex sessions from one continuous thread.`,
+        caveat: `Best suited for ongoing multi-tool projects; quick one-off questions still belong in standard Chat.`
+      },
+      {
+        id: `openai-codex`,
+        name: `OpenAI Codex`,
+        category: `Ecosystems & Modes`,
+        access: `free`,
+        accessLabel: `Free & Paid Plans`,
+        lift: 2,
+        liftLabel: `Low–Medium (Vibe Coding)`,
+        location: `ChatGPT Desktop App`,
+        tags: [`Vibe Coding`, `Higher Limits`, `Computer Use`],
+        summary: `OpenAI's agentic coding mode inside the desktop app. Matches Claude Code on single-shot app builds while currently offering significantly higher usage allowances.`,
+        workflow: `Used to vibe-code a custom image-comparison presentation web app while testing GPT Image 2.5, stitch frame-by-frame stop-motion basketball animations, and open Adobe Premiere Pro via computer use to test a custom plugin like a human user.`,
+        caveat: `Less stylized design defaults out of the box compared to Claude Design, and computer-use loops take patience.`
+      },
+      {
+        id: `claude-chat-projects`,
+        name: `Claude Chat, Projects & Artifacts`,
+        category: `Ecosystems & Modes`,
+        access: `free`,
+        accessLabel: `Free / Pro Plans`,
+        lift: 1,
+        liftLabel: `Low (No Code)`,
+        location: `claude.ai / Desktop`,
+        tags: [`Writing Leader`, `Memory`, `Shareable UI`],
+        summary: `Top daily driver for natural writing, script hooks, and critiques. Projects lock in custom instructions, memory, and SOP files; Artifacts render interactive side-panel tools shareable by URL.`,
+        workflow: `Dropping receipts into an Artifact builds an interactive expense dashboard in one prompt; connecting Granola and Gamma via MCP pulls strategy call notes straight into presentation drafts.`,
+        caveat: `Avoid Haiku for serious work—use Sonnet as daily driver and Opus for deep multi-step reasoning to avoid wasting tokens.`
+      },
+      {
+        id: `claude-cowork`,
+        name: `Claude Cowork`,
+        category: `Agents & Automation`,
+        access: `paid`,
+        accessLabel: `Paid Claude Desktop`,
+        lift: 1,
+        liftLabel: `Low (No Code)`,
+        location: `Claude Desktop Cowork Tab`,
+        tags: [`Desktop Agent`, `File Ops`, `MCP`],
+        summary: `Anthropic's non-technical desktop coworker that organizes local files, extracts data from documents, and automates multi-step desktop tasks autonomously.`,
+        workflow: `Assign a local workspace folder and ask Cowork to organize documents, draft deliverables, or run external skills scanned with Nvidia Skill Inspector.`,
+        caveat: `Currently lacks native memory across separate sessions—workaround is instructing it to maintain a running log file inside your project folder.`
+      },
+      {
+        id: `claude-code`,
+        name: `Claude Code`,
+        category: `Ecosystems & Modes`,
+        access: `paid`,
+        accessLabel: `Paid Claude Plan`,
+        lift: 2,
+        liftLabel: `Low–Medium (Plan Mode)`,
+        location: `Claude Desktop Code Tab`,
+        tags: [`Vibe Coding`, `Self-Debugging`, `Asana/Granola`],
+        summary: `Plain-language software builder with Plan Mode (a built-in context interview) that writes code, launches the app, tests it, catches its own bugs, and pushes updates.`,
+        workflow: `Connected to Granola and Asana via MCP to build a live Kanban board that automatically extracts meeting action items and lets users drag-and-drop assignees straight to team boards.`,
+        caveat: `You hit rate/usage limits faster in Claude Code than in OpenAI Codex, making it pricier for heavy daily building.`
+      },
+      {
+        id: `claude-design`,
+        name: `Claude Design`,
+        category: `Ecosystems & Modes`,
+        access: `paid`,
+        accessLabel: `Paid Claude Account`,
+        lift: 1,
+        liftLabel: `Low (Visual + Prompt)`,
+        location: `claude.ai/design`,
+        tags: [`Design Systems`, `Motion Graphics`, `3D & Slides`],
+        summary: `Upgraded design studio supporting mobile apps, slides, docs, wireframes, 3D objects, HTML emails, flyers, Design Systems, and timestamp-synced MP4 motion graphics.`,
+        workflow: `Uploaded a single logo to generate a full Future Fuel Design System, built a 4-page interactive e-commerce mockup with inline text/spacing edits and Tweaks variants, exported to Claude Code as a zip, and generated MP4 talking-head intro animations from Gemini-timestamped transcripts.`,
+        caveat: `Without a custom Design System, outputs gravitate toward a recognizable default Claude aesthetic; not meant for long faceless explainer cartoons.`
+      },
+      {
+        id: `notebooklm`,
+        name: `NotebookLM`,
+        category: `Ecosystems & Modes`,
+        access: `free`,
+        accessLabel: `Free (Pro Optional)`,
+        lift: 1,
+        liftLabel: `Low (No Code)`,
+        location: `notebooklm.google.com`,
+        tags: [`Zero-Guess RAG`, `Inline Citations`, `Studio Formats`],
+        summary: `The flagship RAG research workspace. Grounds every answer exclusively in your approved sources (up to 50 free) with clickable inline citations and Studio outputs.`,
+        workflow: `Uploaded Hank Green videos, PDFs, and web articles on AI water usage; ran Deep Research; generated Risk Analysis reports, Data Tables comparing industry projections (4.2–6.6B), Audio Debate podcasts, Infographics, and Short-form Video Overviews—then attached the notebook as a live knowledge base inside Gemini Gems.`,
+        caveat: `Cannot search the open web inside its standard chat panel and silos separate notebooks—connect notebooks inside Gemini to synthesize across them or pull live news.`
+      },
+      {
+        id: `gemini-gems`,
+        name: `Google Gemini, Deep Research & Gems`,
+        category: `Ecosystems & Modes`,
+        access: `free`,
+        accessLabel: `Free & Paid (Ultra for Deepthink)`,
+        lift: 1,
+        liftLabel: `Low (No Code)`,
+        location: `gemini.google.com`,
+        tags: [`Multimodal`, `YouTube Native`, `NotebookLM Link`],
+        summary: `Best-in-class multimodal and YouTube video analyzer with Workspace side-panel integration, Canvas, Deep Research reports, Lyria 3 music, and NotebookLM-powered Gems.`,
+        workflow: `Created a YouTube Strategist Gem wired to a NotebookLM database of 25 top video transcripts + analytics PDF to critique hooks, plus attached 3 separate technical notebooks (LLMs, Diffusion, Video Gen) to synthesize how multimodal Gemini 3 works alongside live web search.`,
+        caveat: `In-chat Veo video generation is tightly rate-limited even on paid plans (only a few clips per day), and Gemini-generated images include a watermark.`
+      },
+      {
+        id: `google-ai-studio`,
+        name: `Google AI Studio (Build Tab)`,
+        category: `Google Labs & Vibe Coding`,
+        access: `free`,
+        accessLabel: `Free ($300 Cloud Credits to Deploy)`,
+        lift: 2,
+        liftLabel: `Low (1-Prompt Tools)`,
+        location: `aistudio.google.com`,
+        tags: [`Free Vibe Coding`, `Camera/Voice`, `1-Click Deploy`],
+        summary: `The fastest free entry point to vibe-code internal tools, interactive prompt libraries, and multimodal prototypes with access to Maps, camera hand-tracking, voice, and sheet music.`,
+        workflow: `Built "YouTube Insight Pro" in 30 seconds from one prompt—analyzing video URLs for 85% sentiment, top viewer questions, and critical feedback—plus deployed a variable-autofill LLM hallucination prompt page in 10 minutes embedded on Futurepedia.`,
+        caveat: `Best for internal tools and personal utilities; deploying apps for heavy public traffic requires upgrading beyond free Google Cloud trial credits.`
+      },
+      {
+        id: `google-opal`,
+        name: `Google Opal`,
+        category: `Google Labs & Vibe Coding`,
+        access: `free`,
+        accessLabel: `Free (Google Labs)`,
+        lift: 2,
+        liftLabel: `Low (No-Code Nodes)`,
+        location: `labs.google`,
+        tags: [`Node Workflows`, `Agent Step`, `Opal Gems`],
+        summary: `Google Labs' visual node-based workflow builder (similar to n8n) where a single prompt generates the entire node graph—now upgraded with an autonomous Agent step.`,
+        workflow: `Generated a 4-node workflow from one prompt to scrape top 5 trending Hugging Face papers, simplify their abstracts, and summarize real-world AI impact in one sentence; paid Gemini users can also run Opal-based Gems inside Gemini.`,
+        caveat: `May occasionally miss an input parameter like a target URL on the first generation—click into the failing node or use Suggest Edit to fix it.`
+      },
+      {
+        id: `google-pomelli`,
+        name: `Google Pomelli`,
+        category: `Google Labs & Vibe Coding`,
+        access: `free`,
+        accessLabel: `Free (Google Labs)`,
+        lift: 1,
+        liftLabel: `Low (URL Input)`,
+        location: `labs.google`,
+        tags: [`Marketing`, `Business DNA`, `JSON Export`],
+        summary: `Drops in any website URL to extract a full "Business DNA" profile (fonts, logo, colors, tone, values) and spins up editable, animatable social media campaigns in minutes.`,
+        workflow: `Pasted Liquid Death's URL to extract brand assets, selected "Hydrate like a headliner" campaign variants, tweaked copy and layout fixes inline, added light-sweep animation, and exported the complete Business DNA as JSON.`,
+        caveat: `May pull noisy extra accent colors from complex websites that you'll want to prune manually before generating campaigns.`
+      },
+      {
+        id: `google-stitch`,
+        name: `Google Stitch`,
+        category: `Google Labs & Vibe Coding`,
+        access: `free`,
+        accessLabel: `Free (Google Labs)`,
+        lift: 2,
+        liftLabel: `Low (Design-to-App)`,
+        location: `labs.google`,
+        tags: [`UI Prototyping`, `Screenshot Remix`, `AI Studio Export`],
+        summary: `Prompt-to-Figma-style UI designer for mobile and web apps. Generates multi-theme variations simultaneously and exports clean HTML/images directly into Google AI Studio.`,
+        workflow: `Prototyped a "Future Fuel" energy drink store across red, purple, and yellow light/dark themes in parallel, and converted a Zillow screenshot into a "Mars Real Estate" listing app ("Zenith Glass Dome — 1.2M Mars Coins") turned functional via "Build with AI Studio".`,
+        caveat: `Buttons and backends inside initial exports are UI-only until wired up inside AI Studio or a code agent.`
+      },
+      {
+        id: `google-flow`,
+        name: `Google Flow & Workspace Studio`,
+        category: `Google Labs & Vibe Coding`,
+        access: `free`,
+        accessLabel: `Google Labs / Workspace`,
+        lift: 2,
+        liftLabel: `Low`,
+        location: `labs.google / Workspace`,
+        tags: [`Draw-to-Edit`, `Ingredients-to-Video`, `Gmail/Sheets`],
+        summary: `Flow acts as a full creative video studio (draw onto images to request edits, combine character "ingredients" into video scenes); Workspace Studio automates Gmail, Sheets, and Drive routines.`,
+        workflow: `Used Flow to composite specific characters entering an existing scene, while Workspace Studio handles automated email triage, meeting scheduling, file organization, and sheet edits.`,
+        caveat: `Creative studio features evolve rapidly and sit across separate Google Labs endpoints.`
+      },
+      {
+        id: `google-antigravity`,
+        name: `Google Antigravity`,
+        category: `Google Labs & Vibe Coding`,
+        access: `free`,
+        accessLabel: `Google Ecosystem`,
+        lift: 2,
+        liftLabel: `Low–Medium`,
+        location: `Google Developer / AI`,
+        tags: [`Vibe Coding`, `Agentic Builder`],
+        summary: `Google's recently overhauled agentic coding platform positioned directly alongside Claude Code and OpenAI Codex.`,
+        workflow: `Builds full multi-file applications and personal tools from natural-language specifications inside the Google ecosystem.`,
+        caveat: `Newer update with less long-term community battle-testing than Claude Code.`
+      },
+      {
+        id: `zapier-agents`,
+        name: `Zapier & Zapier AI Agents`,
+        category: `Agents & Automation`,
+        access: `paid`,
+        accessLabel: `Freemium / Paid SaaS`,
+        lift: 1,
+        liftLabel: `Low (Managed SaaS)`,
+        location: `zapier.com`,
+        tags: [`Copilot`, `SaaS Triggers`, `Enterprise Safe`],
+        summary: `Fully managed no-code automation + Copilot-built AI agents. Ideal when your stack uses mainstream SaaS tools (Gmail, Slack, HubSpot, Kajabi, Beehiiv, Notion, Stripe) and non-technical teams maintain them.`,
+        workflow: `Adding a sponsor row in Google Sheets (or HubSpot form/Gmail) triggers an agent that autonomously pivots from a sparse URL to OpenAI's main site, runs 5+ searches, flags legal risks, and drops a 1-sentence-per-category brief into Google Drive.`,
+        caveat: `Use traditional deterministic Zaps when branching logic is fixed; reserve AI Agents only for tasks needing reasoning and adaptability.`
+      },
+      {
+        id: `n8n`,
+        name: `n8n`,
+        category: `Agents & Automation`,
+        access: `free`,
+        accessLabel: `Open-Source Self-Host / Cloud`,
+        lift: 3,
+        liftLabel: `Medium–High (JSON/APIs)`,
+        location: `n8n.io / Hostinger VPS`,
+        tags: [`Node Canvas`, `Self-Hostable`, `Human-in-Loop`],
+        summary: `Deeply customizable node-based automation and AI Agent builder exposing Chat Model (Brain), Memory (Vector DB), and Tools (APIs/HTTP), plus full JSON schemas.`,
+        workflow: `Powers Futurepedia's multi-agent newsletter pipeline: ingests vetted YouTube scripts, scrapes custom web pages, routes drafts to specialized OpenAI Assistants (How-To, Deep Dive, Weekly Spotlight), and pings Slack for mandatory human-in-the-loop fact-checking.`,
+        caveat: `Steeper learning curve and API-key management; self-hosting shifts security, monitoring, and compliance responsibility onto your team.`
+      },
+      {
+        id: `manus`,
+        name: `Manus`,
+        category: `Agents & Automation`,
+        access: `paid`,
+        accessLabel: `Credits / Subscription`,
+        lift: 1,
+        liftLabel: `Low (Goal Prompt)`,
+        location: `manus.im`,
+        tags: [`Multi-Model`, `Autonomous Research`, `Skill Creator`],
+        summary: `A multi-model orchestrating agent that breaks down complex goals into an approval plan, runs extended background research, generates B-roll visuals, and delivers interactive web reports.`,
+        workflow: `Given a companion-research goal on AI agents, Manus analyzed YouTube comments and Reddit pain points, generated B-roll images, and built an interactive navigable dashboard—plus offers an official library with a "Skill Creator" skill.`,
+        caveat: `Extended multi-step runs consume significant credits; review the early approval plan before letting it run unattended.`
+      },
+      {
+        id: `openclaw`,
+        name: `OpenClaw`,
+        category: `Agents & Automation`,
+        access: `free`,
+        accessLabel: `Open-Source (+ API/VPS Costs)`,
+        lift: 3,
+        liftLabel: `High (VPS / Mac Mini)`,
+        location: `GitHub / Pinokio / Hostinger VPS`,
+        tags: [`24/7 Local Agent`, `WhatsApp/Telegram`, `Self-Improving`],
+        summary: `Viral open-source persistent personal AI agent running on a dedicated Mac Mini or VPS. You message it via WhatsApp or Telegram, and it learns preferences and refines its own rubrics across sessions.`,
+        workflow: `Given email, calendar, and browser tools on an isolated VPS, it executes background tasks and adjusts daily research filters based on simple feedback ("liked these, skip those").`,
+        caveat: `High setup friction and real security risks—do not install on your primary machine or hand over sensitive credentials/credit cards lightly.`
+      },
+      {
+        id: `gpt-image-25`,
+        name: `GPT Image 2.5 (Flare & Sunburst)`,
+        category: `Image & Video Models`,
+        access: `paid`,
+        accessLabel: `ChatGPT & OpenAI API`,
+        lift: 1,
+        liftLabel: `Low (Prompt / Sketch)`,
+        location: `ChatGPT Images / API`,
+        tags: [`Text Fidelity`, `Astra Research`, `Transparent PNG`],
+        summary: `Leading real-world image generator split into 2.5 Flare (fast) and 2.5 Sunburst (advanced). In ChatGPT, it auto-routes and runs Astra web research before drawing dense infographics and comparison charts.`,
+        workflow: `Researched for 1.5–8.5 minutes before rendering error-free American Revolution timeline posters, Toyota Sienna trim charts, daily news dashboards, transparent jellyfish PNGs, and consistent Midjourney-style transfers.`,
+        caveat: `Struggles with exact analog clock hands (e.g. 8:22), occasionally adds unrequested quotes/text, shows noise artifacts on dense textures, and editing tiny text inside complex posters can shift fonts.`
+      },
+      {
+        id: `nano-banana-pro`,
+        name: `Nano Banana & Nano Banana Pro`,
+        category: `Image & Video Models`,
+        access: `free`,
+        accessLabel: `Gemini App / API / Higgsfield`,
+        lift: 1,
+        liftLabel: `Low`,
+        location: `Gemini / Higgsfield / API`,
+        tags: [`Prompt Adherence`, `Natural Edits`, `Diagrams`],
+        summary: `Google's visual generation model excelling at tight prompt adherence, natural-language image modifications, and clean B-roll diagrams.`,
+        workflow: `Generated clean multimodal Gemini architecture graphics in one shot—cutting 30–60 minutes of manual Photoshop icon layout down to seconds.`,
+        caveat: `Using Nano Banana inside the Gemini app stamps a watermark; use it through Higgsfield or the API for clean assets. Slightly less dense-text accuracy than GPT Image 2.5.`
+      },
+      {
+        id: `veo-31`,
+        name: `Veo 3.1`,
+        category: `Image & Video Models`,
+        access: `paid`,
+        accessLabel: `Gemini / Flow / Higgsfield / Artlist`,
+        lift: 1,
+        liftLabel: `Low`,
+        location: `Higgsfield / Artlist / Gemini`,
+        tags: [`Synced Audio`, `Dialogue & SFX`, `Image-to-Video`],
+        summary: `Top-tier AI video generator producing synchronized sound effects, music, and emotional dialogue alongside high-fidelity cinematic motion.`,
+        workflow: `Primary model for lifelike cinematic scenes and animating keyframe images (such as looping hero backgrounds from GPT Image 2), often paired with Kling 3.0 when specific shots hit Veo prompt censorship.`,
+        caveat: `Stricter prompt moderation than competitors and tight daily generation caps inside the consumer Gemini app.`
+      },
+      {
+        id: `sora-2`,
+        name: `Sora 2`,
+        category: `Image & Video Models`,
+        access: `paid`,
+        accessLabel: `OpenAI / Higgsfield / Artlist`,
+        lift: 1,
+        liftLabel: `Low`,
+        location: `Higgsfield / Artlist / Sora`,
+        tags: [`Text-to-Video King`, `Physics`, `S-Tier Consistency`],
+        summary: `Most consistent S-tier performer across text-to-video animation benchmarks (simple scenes, physics, emotional dialogue, and complex obstacle movement).`,
+        workflow: `Won top consistency rankings in head-to-head 9-model animation tests, handling complex leaps over debris cleanly.`,
+        caveat: `Cannot animate uploaded images containing human characters—making it unsuitable for character-driven image-to-video workflows—and struggles with cursive text on chalkboards.`
+      },
+      {
+        id: `kling-3`,
+        name: `Kling 2.6 / 3.0`,
+        category: `Image & Video Models`,
+        access: `paid`,
+        accessLabel: `Higgsfield / Artlist / Kling`,
+        lift: 1,
+        liftLabel: `Low`,
+        location: `Higgsfield / Artlist`,
+        tags: [`Short Films`, `Complex Shots`, `Permissive`],
+        summary: `Versatile AI video powerhouse favored for multi-minute short films and difficult action/camera shots where other models refuse or fail.`,
+        workflow: `Used alongside Veo 3.1 to rescue tricky shots that Veo censors or misinterprets during cinematic sequence production.`,
+        caveat: `Struggles heavily when asked to render legible on-screen text in text-to-video prompts.`
+      },
+      {
+        id: `grok-imagine`,
+        name: `Grok Imagine`,
+        category: `Image & Video Models`,
+        access: `paid`,
+        accessLabel: `xAI / Artlist`,
+        lift: 1,
+        liftLabel: `Low`,
+        location: `Artlist AI Toolkit / xAI`,
+        tags: [`Fast Improver`, `Surprise Winner`],
+        summary: `Rapidly improved video generator that jumped from trailing the pack to winning multiple head-to-head animation challenges.`,
+        workflow: `Tested inside Artlist's AI Toolkit across dialogue, emotion, and complex movement prompts, earning consistent A-tier rankings.`,
+        caveat: `Still trails Sora 2 slightly on overall weighted text-to-video consistency.`
+      },
+      {
+        id: `higgsfield-artlist`,
+        name: `Higgsfield & Artlist AI Toolkit`,
+        category: `Image & Video Models`,
+        access: `paid`,
+        accessLabel: `Unified Subscription`,
+        lift: 1,
+        liftLabel: `Low`,
+        location: `higgsfield.ai / artlist.io`,
+        tags: [`API Aggregator`, `No Watermark`, `Batch Compare`],
+        summary: `All-in-one creative workspaces unifying GPT Image 2, Nano Banana Pro, Veo 3.1, Sora 2, Kling, Wan, Hailuo, Seedance, Runway, and Grok Imagine without juggling 10 subscriptions.`,
+        workflow: `Run 4 to 20 image variants simultaneously across competing models, pick the sharpest keyframe, and immediately animate it in the video tab without leaving your context.`,
+        caveat: `Aggregator platforms may trail brand-new standalone web features (like GPT Image 2.5 Astra deep web research) by a few weeks.`
+      },
+      {
+        id: `granola`,
+        name: `Granola AI`,
+        category: `Productivity & Local`,
+        access: `paid`,
+        accessLabel: `Freemium / Paid`,
+        lift: 1,
+        liftLabel: `Low (Mac/Win)`,
+        location: `granola.ai`,
+        tags: [`Bot-Free`, `System Audio`, `MCP Connected`],
+        summary: `AI meeting notepad that transcribes system audio silently—no awkward bot joins your Zoom or Meet call—and weaves your rough jotted bullets into structured notes.`,
+        workflow: `Connected via MCP to Claude Code, Claude Chat, and ChatGPT Work so every strategy call immediately feeds Kanban task boards, follow-up emails, and slide decks.`,
+        caveat: `Ask-anything chat recalls exact quotes ("What did Sarah say about budget?"), but still benefits from quick human note anchors during calls.`
+      },
+      {
+        id: `wispr-flow`,
+        name: `Wispr Flow`,
+        category: `Productivity & Local`,
+        access: `paid`,
+        accessLabel: `Freemium / Paid`,
+        lift: 1,
+        liftLabel: `Low (OS-Wide)`,
+        location: `Desktop & Mobile`,
+        tags: [`Smart Dictation`, `Self-Correcting`, `Rich Context`],
+        summary: `System-wide AI speech-to-text that strips "ums", repairs false starts, and resolves mid-sentence corrections automatically across emails, texts, and AI prompts.`,
+        workflow: `Say "Hey John—wait no, Sarah, send the documents, no the videos" and it outputs "Hey Sarah, could you send over the videos?"—enabling massive, high-context voice prompts without typing.`,
+        caveat: `Native AI platforms may eventually absorb this capability, though Wispr Flow currently outperforms standard OS dictation.`
+      },
+      {
+        id: `pinokio`,
+        name: `Pinokio`,
+        category: `Productivity & Local`,
+        access: `free`,
+        accessLabel: `100% Free Open-Source`,
+        lift: 2,
+        liftLabel: `Low–Medium (Local GPU)`,
+        location: `Desktop App`,
+        tags: [`1-Click Local`, `Open-Source`, `No CLI`],
+        summary: `One-click local browser/installer for open-source AI applications—eliminating intimidating terminal, Python environment, and dependency headaches.`,
+        workflow: `Installs local open-source tools including OpenClaw and image/audio models locally for free with zero manual environment setup.`,
+        caveat: `Local execution performance depends on your own machine's hardware and VRAM.`
+      },
+      {
+        id: `hubspot-aeo`,
+        name: `HubSpot AEO`,
+        category: `Productivity & Local`,
+        access: `paid`,
+        accessLabel: `28-Day Free Trial`,
+        lift: 1,
+        liftLabel: `Low (Analytics)`,
+        location: `HubSpot`,
+        tags: [`Answer Engines`, `Citation Tracking`, `Sentiment`],
+        summary: `Tracks how ChatGPT, Gemini, and Perplexity describe your brand daily, which exact listicles/videos they cite, and gives targeted content recommendations to win AI answers.`,
+        workflow: `Audited Futurepedia across buyer-journey prompts: revealed 35% of citations came from listicles, flagged a 0% gap on coding-directory prompts with exact outreach targets, and scored brand sentiment.`,
+        caveat: `Manual spot-checking in temporary chats works for free, though automated daily tracking across multiple LLMs requires a platform.`
+      },
+      {
+        id: `emergent-lovable`,
+        name: `Emergent AI & Lovable`,
+        category: `Google Labs & Vibe Coding`,
+        access: `paid`,
+        accessLabel: `Credits / Subscription`,
+        lift: 2,
+        liftLabel: `Low–Medium (Production Apps)`,
+        location: `Web Platforms`,
+        tags: [`Full Backends`, `Stripe/Auth`, `GitHub Fork`],
+        summary: `Dedicated vibe-coding builders designed for shipping real customer-facing web apps with databases, Stripe payments, and auth—Emergent adds GitHub fork mode, MCPs, and universal LLM keys.`,
+        workflow: `Built a creator app in Emergent combining Claude Sonnet for scripts/hooks, Nano Banana Pro for thumbnails via universal LLM key (no separate API setup), and Stripe test integration.`,
+        caveat: `For internal tools and personal utilities, Claude Code, Codex, and Google AI Studio replace extra builder subscriptions.`
+      },
+      {
+        id: `llm-council`,
+        name: `LLM Council & ChatHub`,
+        category: `Productivity & Local`,
+        access: `free`,
+        accessLabel: `Open-Source (GitHub) / SaaS`,
+        lift: 2,
+        liftLabel: `Medium (GitHub) / Low (ChatHub)`,
+        location: `GitHub / Web`,
+        tags: [`Anti-Hallucination`, `Peer Review`, `High Stakes`],
+        summary: `Routes one mission-critical prompt simultaneously to ChatGPT, Gemini, Claude, and Grok—then anonymizes responses so peer models and a chairman synthesize the verified consensus.`,
+        workflow: `Caught subtle variance between Claude and ChatGPT/Gemini/DeepSeek on complex reasoning checks by stripping model names so the auditor avoids brand bias.`,
+        caveat: `Slower and higher token cost; reserve for high-stakes business, legal, or strategic decisions.`
+      }
+    ];
+
+    const SKILLS_DATA = [
+      {
+        id: `skill-last30`,
+        name: `Last 30 Days`,
+        platforms: `ChatGPT Work · Codex · Claude`,
+        role: `Real-Time Social & Forum Research`,
+        command: `@last-30-days`,
+        summary: `Searches YouTube transcripts, Reddit, Hacker News, Polymarket, GitHub, and X/Instagram/TikTok (via Scrape Creators), filters by engagement, and outputs a concise cited report—can be wrapped into an interactive Site.`,
+        safety: `Public GitHub repo`
+      },
+      {
+        id: `skill-inspector`,
+        name: `Nvidia Skill Inspector`,
+        platforms: `Claude Cowork · Agent Builders`,
+        role: `Security & Risk Scanner`,
+        command: `Inspect [GitHub URL]`,
+        summary: `Scans third-party agent skills, embedded scripts, and tool definitions before installation to flag exposed API keys, sensitive data access, or unintended agent actions.`,
+        safety: `Essential pre-install step`
+      },
+      {
+        id: `skill-remotion`,
+        name: `Remotion (+ Remotion Maps)`,
+        platforms: `Claude Code · ChatGPT Work Desktop`,
+        role: `React Programmatic Motion Graphics`,
+        command: `@remotion`,
+        summary: `Teaches your agent to code smooth React motion graphics, animated icon bursts, data visualizations, and 3D highway map animations inside a live preview editor.`,
+        safety: `Preferred for icon motion graphics`
+      },
+      {
+        id: `skill-hyperframes`,
+        name: `Hyperframes`,
+        platforms: `Claude Code · ChatGPT Work Desktop`,
+        role: `HTML & Web-Animation Video Engine`,
+        command: `Use Hyperframes`,
+        summary: `Generates videos via HTML and web animations rather than React. Delivered cleaner camera angles and smoother highway zooms on a 15-second Utah National Parks road trip map test.`,
+        safety: `Preferred for map aesthetics`
+      },
+      {
+        id: `skill-humanizer`,
+        name: `Humanizer`,
+        platforms: `Claude Cowork · ChatGPT · Codex`,
+        role: `AI Slop & Cliché Remover`,
+        command: `Fix with Humanizer`,
+        summary: `Strips robotic LLM tells ("Don't need X, need Y", "It's not A, it's B", cheesy closers like "Welcome to System 1") and lists every edit made at the bottom so you can tailor it to your voice.`,
+        safety: `Passed Nvidia Skill Inspector`
+      },
+      {
+        id: `skill-claude-video`,
+        name: `Claude Video`,
+        platforms: `Codex · Claude · ChatGPT`,
+        role: `URL & Frame Video Analyzer`,
+        command: `@claude-video`,
+        summary: `Downloads and extracts frames from Instagram/web video URLs or local files to read on-screen text and timings (optional OpenAI API key fallback when a video lacks captions).`,
+        safety: `Free without API fallback`
+      },
+      {
+        id: `skill-superpowers`,
+        name: `Superpowers`,
+        platforms: `Claude Code · Agent Builders`,
+        role: `Full Development Playbook`,
+        command: `Auto-invoked`,
+        summary: `A multi-skill engineering playbook consulted automatically during builds for brainstorming, spec planning, sub-agent delegation, implementation, testing, and debugging.`,
+        safety: `Anthropic/Community staple`
+      },
+      {
+        id: `skill-gstack`,
+        name: `Gstack (Gary Tan / YC)`,
+        platforms: `Claude Code · Codex`,
+        role: `Product, Review & Shipping Suite`,
+        command: `Product & QA skills`,
+        summary: `Collection of startup shipping skills maintained by Y Combinator's CEO: challenges product ideas, reviews technical plans, runs browser QA tests, fixes bugs, and manages releases.`,
+        safety: `Complements Superpowers`
+      },
+      {
+        id: `skill-impeccable`,
+        name: `Impeccable`,
+        platforms: `Claude Code · ChatGPT · Codex`,
+        role: `24 Anti-AI-Design-Slop Commands`,
+        command: `boulder · delight · critique`,
+        summary: `Replaces generic AI web templates with distinctive typography, layout, and motion. "Boulder" amplifies timid designs, "Delight" adds tactile passport-stamp animations, and "Critique" audits UX & mobile responsiveness.`,
+        safety: `24 active design commands`
+      }
+    ];
+
+    const LEVELS_DATA = [
+      {
+        level: `L1`,
+        title: `Basic Chat`,
+        desc: `Treating AI like a search bar with short, one-off questions and accepting generic default answers.`,
+        action: `Stop opening bare chats for recurring tasks—identify your single highest-frequency work area.`
+      },
+      {
+        level: `L2`,
+        title: `Structured Prompting`,
+        desc: `Using ICC (Instructions, Context, Constraints) plus a Context Interview so the model asks clarifying questions before answering.`,
+        action: `Append "Ask me any clarifying questions needed before generating" to your next complex prompt.`
+      },
+      {
+        level: `L3`,
+        title: `Context Engineering (Projects)`,
+        desc: `Building dedicated workspaces (Claude/ChatGPT Projects or NotebookLM + Gems) pre-loaded with SOPs, brand voice, and reference docs.`,
+        action: `Run one deep Context Interview about your business, save the output as a doc, and upload it to a Project.`
+      },
+      {
+        level: `L4`,
+        title: `Multi-Tool Ecosystem & Artifacts`,
+        desc: `Matching the right tool to each job—NotebookLM for grounded research, Granola for bot-free meetings, Higgsfield for media, Canvas/Artifacts for instant prototypes.`,
+        action: `Open Artifacts or Canvas today and describe one small interactive dashboard or tracker you wish existed.`
+      },
+      {
+        level: `L5`,
+        title: `Automated Pipelines`,
+        desc: `Triggering repeatable workflows on schedules or events via Zapier Copilot, Google AI Studio tools, or ChatGPT Work Scheduled Tasks.`,
+        action: `Write down every subtask in your day, pick one repetitive trigger, and describe it to Zapier Copilot or Work.`
+      },
+      {
+        level: `L6`,
+        title: `Agentic Builders & Custom Systems`,
+        desc: `Using Claude Code, Codex, n8n, or OpenClaw to build custom internal apps, multi-agent pipelines, and MCP-connected tools without writing code manually.`,
+        action: `Open Claude Code or Codex, enter Plan Mode, and build a custom solution for a workflow that costs hours weekly.`
+      },
+      {
+        level: `L7`,
+        title: `Autonomous Agent Workforce`,
+        desc: `Aspirational horizon where coordinated AI agents operate business functions around the clock while humans supply taste, strategy, and oversight.`,
+        action: `Build "agent literacy" now: start with low-precision tasks, enforce human-in-the-loop QA, and track efficiency, quality, and ROI.`
+      }
+    ];
+
+    const RECOMMENDATIONS = {
+      writing: {
+        nontech: {
+          primary: `Claude Ecosystem`,
+          title: `Claude Chat + Projects + Claude Design`,
+          reason: `Claude leads in natural prose, hooks, and critiques. Use Projects for persistent voice, Artifacts for quick tools, and Claude Design for on-brand decks & motion graphics.`,
+          tools: [`claude-chat-projects`, `claude-design`, `granola`, `wispr-flow`]
+        },
+        builder: {
+          primary: `Claude Ecosystem`,
+          title: `Claude Code + Design + Impeccable Skill`,
+          reason: `Pair Claude Design's brand systems with Claude Code's Plan Mode and the Impeccable skill to ship distinctive tools and motion assets without AI slop.`,
+          tools: [`claude-code`, `claude-design`, `claude-chat-projects`, `granola`]
+        },
+        technical: {
+          primary: `Claude + n8n`,
+          title: `Claude Code + MCP Connectors + n8n`,
+          reason: `Wire Granola and Asana into Claude Code via MCP, and run custom multi-assistant editorial pipelines with human-in-the-loop checks in n8n.`,
+          tools: [`claude-code`, `n8n`, `claude-design`, `wispr-flow`]
+        }
+      },
+      allinone: {
+        nontech: {
+          primary: `ChatGPT Ecosystem`,
+          title: `ChatGPT Work + Sites + GPT Image 2.5`,
+          reason: `Broadest all-in-one platform: Work organizes local folders, schedules daily tasks, builds live hosted Sites, and accesses GPT Image 2.5 Astra-researched visuals.`,
+          tools: [`chatgpt-work`, `gpt-image-25`, `zapier-agents`, `wispr-flow`]
+        },
+        builder: {
+          primary: `ChatGPT + Codex`,
+          title: `OpenAI Codex + ChatGPT Work + Sites`,
+          reason: `Codex matches Claude Code on single-shot builds with higher usage limits, while Work turns outputs into persistent hosted apps on chatgpt.site.`,
+          tools: [`openai-codex`, `chatgpt-work`, `gpt-image-25`, `chatgpt-dots`]
+        },
+        technical: {
+          primary: `ChatGPT + OpenClaw / n8n`,
+          title: `Codex + Zapier / n8n + LLM Council`,
+          reason: `Combine Codex computer-use testing with automated SaaS/node pipelines and multi-model verification for high-stakes decisions.`,
+          tools: [`openai-codex`, `n8n`, `llm-council`, `chatgpt-dots`]
+        }
+      },
+      research: {
+        nontech: {
+          primary: `Google Gemini + NotebookLM`,
+          title: `NotebookLM + Gemini Gems + Deep Research`,
+          reason: `Unbeatable free RAG stack: ground up to 50 sources in NotebookLM with clickable citations, then connect notebooks into Gemini Gems for live web synthesis and YouTube analysis.`,
+          tools: [`notebooklm`, `gemini-gems`, `google-ai-studio`, `granola`]
+        },
+        builder: {
+          primary: `Google Gemini + AI Studio`,
+          title: `NotebookLM + Google AI Studio + Stitch + Opal`,
+          reason: `Use NotebookLM for verified knowledge, Opal for visual node scraping workflows, and AI Studio / Stitch to turn ideas into deployed internal tools for free.`,
+          tools: [`notebooklm`, `google-ai-studio`, `google-opal`, `google-stitch`]
+        },
+        technical: {
+          primary: `Google + Multi-Model Stack`,
+          title: `NotebookLM + AI Studio + LLM Council`,
+          reason: `Ground facts in NotebookLM, verify reasoning across models via Karpathy's LLM Council, and deploy custom multimodal tools on Google Cloud credits.`,
+          tools: [`notebooklm`, `google-ai-studio`, `llm-council`, `google-opal`]
+        }
+      },
+      automation: {
+        nontech: {
+          primary: `Zapier + ChatGPT Work`,
+          title: `Zapier AI Agents + ChatGPT Work Scheduled Tasks`,
+          reason: `Fastest no-code path to level 5: describe triggers and research goals to Zapier Copilot for managed SaaS integrations, plus Work for local file routines.`,
+          tools: [`zapier-agents`, `chatgpt-work`, `claude-cowork`, `manus`]
+        },
+        builder: {
+          primary: `Manus + Zapier + Opal`,
+          title: `Zapier AI Agents + Google Opal + Manus`,
+          reason: `Combine Zapier's enterprise SaaS reliability with Opal's prompt-generated node graphs and Manus for autonomous multi-model research deliverables.`,
+          tools: [`zapier-agents`, `google-opal`, `manus`, `claude-code`]
+        },
+        technical: {
+          primary: `n8n + OpenClaw`,
+          title: `n8n Self-Hosted + OpenClaw (VPS) + Pinokio`,
+          reason: `Full control over schemas, APIs, vector memory, and 24/7 persistent messaging assistants on an isolated Hostinger VPS or dedicated Mac Mini.`,
+          tools: [`n8n`, `openclaw`, `pinokio`, `llm-council`]
+        }
+      }
+    };
+
+    // =========================================================================
+    // STATE MANAGEMENT (Persisted via window.notebookAppApi)
+    // =========================================================================
+    const DEFAULT_STATE = {
+      selectedCategory: `All`,
+      selectedToolId: `chatgpt-work`,
+      directoryView: `grid`,
+      savedIds: [],
+      userLevel: `L1`,
+      activeLevelView: `L1`,
+      notes: ``,
+      recGoal: `writing`,
+      recComfort: `nontech`,
+      activeChart: `survey`,
+      activeTech: `icc`,
+      rigorLevel: 2,
+      iccGoal: `Build a B2B launch checklist for a new AI meeting workflow`,
+      iccContext: `Small 5-person SaaS team selling to agency founders; non-technical buyers`,
+      iccConstraints: `Under 400 words, plain English, bullet format, avoid hype`
+    };
+
+    let appState = Object.assign({}, DEFAULT_STATE);
+    let benchmarkChartInstance = null;
+
+    async function persistState() {
+      if (window.notebookAppApi && typeof window.notebookAppApi.setAppState === `function`) {
+        try {
+          await window.notebookAppApi.setAppState(appState);
+        } catch (err) {
+          // Graceful fallback inside non-host environments
+        }
+      }
+    }
+
+    function getCssToken(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    // =========================================================================
+    // NAVIGATION & KPI UPDATES
+    // =========================================================================
+    function scrollToSection(id) {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: `smooth`, block: `start` });
+    }
+
+    function updateKPIs() {
+      const kpiTools = document.getElementById(`kpi-total-tools`);
+      const kpiSkills = document.getElementById(`kpi-total-skills`);
+      const kpiSaved = document.getElementById(`kpi-saved-count`);
+      const navSaved = document.getElementById(`nav-stack-count`);
+      const lvlNote = document.getElementById(`kpi-level-note`);
+
+      if (kpiTools) kpiTools.textContent = String(TOOLS_DATA.length);
+      if (kpiSkills) kpiSkills.textContent = String(SKILLS_DATA.length);
+      if (kpiSaved) kpiSaved.textContent = String(appState.savedIds.length);
+      if (navSaved) navSaved.textContent = String(appState.savedIds.length);
+      if (lvlNote) lvlNote.textContent = `Self-assessed: ${appState.userLevel}`;
+    }
+
+    // =========================================================================
+    // SECTION 01: ECOSYSTEM RECOMMENDER & MATRIX HIGHLIGHTING
+    // =========================================================================
+    function updateRecommendation() {
+      const goalEl = document.getElementById(`rec-goal`);
+      const comfortEl = document.getElementById(`rec-comfort`);
+      if (!goalEl || !comfortEl) return;
+
+      appState.recGoal = goalEl.value;
+      appState.recComfort = comfortEl.value;
+
+      const goalGroup = RECOMMENDATIONS[appState.recGoal] || RECOMMENDATIONS.writing;
+      const rec = goalGroup[appState.recComfort] || goalGroup.nontech;
+
+      const badge = document.getElementById(`rec-badge`);
+      const title = document.getElementById(`rec-title`);
+      const reason = document.getElementById(`rec-reason`);
+      const chips = document.getElementById(`rec-chips`);
+
+      if (badge) badge.textContent = `Recommended: ${rec.primary}`;
+      if (title) title.textContent = rec.title;
+      if (reason) reason.textContent = rec.reason;
+      if (chips) {
+        chips.innerHTML = rec.tools.map(function (tid) {
+          const t = TOOLS_DATA.find(function (item) { return item.id === tid; });
+          const label = t ? t.name : tid;
+          return `<span class="tag tag-slate">${label}</span>`;
+        }).join(``);
+      }
+
+      // Highlight matching column in Ecosystem Matrix
+      const cols = [`chatgpt`, `claude`, `gemini`];
+      let activeCol = `claude`;
+      if (appState.recGoal === `allinone`) activeCol = `chatgpt`;
+      if (appState.recGoal === `research`) activeCol = `gemini`;
+      if (appState.recGoal === `automation`) activeCol = `chatgpt`;
+
+      cols.forEach(function (col) {
+        const th = document.getElementById(`th-${col}`);
+        if (th) th.classList.toggle(`col-highlight`, col === activeCol);
+        document.querySelectorAll(`.col-${col}`).forEach(function (td) {
+          td.classList.toggle(`col-highlight`, col === activeCol);
+        });
+      });
+
+      persistState();
+    }
+
+    function applyRecommendedStack() {
+      const goalGroup = RECOMMENDATIONS[appState.recGoal] || RECOMMENDATIONS.writing;
+      const rec = goalGroup[appState.recComfort] || goalGroup.nontech;
+      let added = 0;
+      rec.tools.forEach(function (id) {
+        if (!appState.savedIds.includes(id)) {
+          appState.savedIds.push(id);
+          added += 1;
+        }
+      });
+      renderStack();
+      renderTools();
+      updateKPIs();
+      persistState();
+      const status = document.getElementById(`stack-status`);
+      if (status) {
+        status.textContent = added > 0
+          ? `Added ${added} recommended tools to My Stack below.`
+          : `All recommended tools are already in My Stack.`;
+      }
+      scrollToSection(`sec-stack`);
+    }
+
+    // =========================================================================
+    // SECTION 02: TOOLS & AGENTS DIRECTORY
+    // =========================================================================
+    function renderCategoryChips() {
+      const container = document.getElementById(`category-chips`);
+      if (!container) return;
+      const categories = [`All`, `Ecosystems & Modes`, `Agents & Automation`, `Google Labs & Vibe Coding`, `Image & Video Models`, `Productivity & Local`];
+      container.innerHTML = categories.map(function (cat) {
+        const activeClass = appState.selectedCategory === cat ? ` active` : ``;
+        return `<button type="button" class="chip-btn${activeClass}" onclick="setCategory('${cat}')">${cat}</button>`;
+      }).join(``);
+    }
+
+    function setCategory(cat) {
+      appState.selectedCategory = cat;
+      renderCategoryChips();
+      renderTools();
+      persistState();
+    }
+
+    function toggleDirectoryView() {
+      appState.directoryView = appState.directoryView === `grid` ? `table` : `grid`;
+      const btn = document.getElementById(`toggle-view-btn`);
+      if (btn) btn.textContent = appState.directoryView === `grid` ? `Table View` : `Card View`;
+      renderTools();
+      persistState();
+    }
+
+    function selectTool(id) {
+      appState.selectedToolId = id;
+      renderTools();
+      renderInspector();
+      persistState();
+    }
+
+    function getFilteredTools() {
+      const searchEl = document.getElementById(`search-tools`);
+      const accessEl = document.getElementById(`filter-access`);
+      const sortEl = document.getElementById(`sort-tools`);
+
+      const query = searchEl ? searchEl.value.trim().toLowerCase() : ``;
+      const access = accessEl ? accessEl.value : `all`;
+      const sortBy = sortEl ? sortEl.value : `category`;
+
+      const filtered = TOOLS_DATA.filter(function (t) {
+        if (appState.selectedCategory !== `All` && t.category !== appState.selectedCategory) return false;
+        if (access !== `all` && t.access !== access) return false;
+        if (query) {
+          const hay = `${t.name} ${t.category} ${t.summary} ${t.workflow} ${t.tags.join(` `)}`.toLowerCase();
+          if (!hay.includes(query)) return false;
+        }
+        return true;
+      });
+
+      filtered.sort(function (a, b) {
+        if (sortBy === `name`) return a.name.localeCompare(b.name);
+        if (sortBy === `lift`) return a.lift - b.lift || a.name.localeCompare(b.name);
+        return a.category.localeCompare(b.category) || a.name.localeCompare(b.name);
+      });
+
+      return filtered;
+    }
+
+    function renderTools() {
+      const container = document.getElementById(`directory-list-container`);
+      const countEl = document.getElementById(`dir-match-count`);
+      if (!container) return;
+
+      const list = getFilteredTools();
+      if (countEl) countEl.textContent = `Showing ${list.length} of ${TOOLS_DATA.length} entries`;
+
+      if (list.length === 0) {
+        container.innerHTML = `<div class="empty-state">
+          <strong>No matching tools or agents found</strong>
+          <p style="margin:0;color:var(--on-surface-variant);">Try clearing your search query or switching the category/access filter back to All.</p>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="clearDirectoryFilters()">Reset Filters</button>
+        </div>`;
+        return;
+      }
+
+      if (appState.directoryView === `table`) {
+        const rows = list.map(function (t) {
+          const isSelected = t.id === appState.selectedToolId;
+          const isSaved = appState.savedIds.includes(t.id);
+          return `<tr style="cursor:pointer;${isSelected ? `background:var(--secondary-soft);` : ``}" onclick="selectTool('${t.id}')">
+            <td><strong>${t.name}</strong><br><span style="font-size:0.78rem;color:var(--on-surface-variant);">${t.category}</span></td>
+            <td><span class="tag ${t.access === `free` ? `tag-positive` : `tag-slate`}">${t.access === `free` ? `Free Tier` : `Paid / API`}</span></td>
+            <td>${t.liftLabel}</td>
+            <td><button type="button" class="btn btn-sm ${isSaved ? `btn-gold` : `btn-secondary`}" onclick="event.stopPropagation(); toggleSaveItem('${t.id}')">${isSaved ? `Saved` : `+ Stack`}</button></td>
+          </tr>`;
+        }).join(``);
+
+        container.innerHTML = `<div class="table-wrap">
+          <table aria-label="Filtered AI tools table">
+            <thead>
+              <tr><th>Tool / Agent</th><th>Access</th><th>Lift</th><th>Stack</th></tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+      } else {
+        container.innerHTML = `<div class="tools-grid">` + list.map(function (t) {
+          const isSelected = t.id === appState.selectedToolId ? ` selected` : ``;
+          const isSaved = appState.savedIds.includes(t.id);
+          const accessClass = t.access === `free` ? `tag-positive` : `tag-slate`;
+          const accessText = t.access === `free` ? `Free Tier` : `Paid / API`;
+          return `<div class="tool-card${isSelected}" role="button" tabindex="0" onclick="selectTool('${t.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectTool('${t.id}');}">
+            <div>
+              <div class="tool-card-head">
+                <h3 class="tool-name">${t.name}</h3>
+                <span class="tag ${accessClass}">${accessText}</span>
+              </div>
+              <p style="font-family:var(--font-label);font-size:0.72rem;color:var(--secondary);margin:0.2rem 0 0.45rem;">${t.category}</p>
+              <p class="tool-summary">${t.summary}</p>
+            </div>
+            <div class="tool-footer">
+              <span style="font-family:var(--font-label);font-size:0.72rem;color:var(--on-surface-variant);">${t.liftLabel}</span>
+              <button type="button" class="btn btn-sm ${isSaved ? `btn-gold` : `btn-secondary`}" onclick="event.stopPropagation(); toggleSaveItem('${t.id}')">${isSaved ? `Saved` : `+ Stack`}</button>
+            </div>
+          </div>`;
+        }).join(``) + `</div>`;
+      }
+    }
+
+    function clearDirectoryFilters() {
+      const searchEl = document.getElementById(`search-tools`);
+      const accessEl = document.getElementById(`filter-access`);
+      if (searchEl) searchEl.value = ``;
+      if (accessEl) accessEl.value = `all`;
+      appState.selectedCategory = `All`;
+      renderCategoryChips();
+      renderTools();
+      persistState();
+    }
+
+    function renderInspector() {
+      const t = TOOLS_DATA.find(function (item) { return item.id === appState.selectedToolId; }) || TOOLS_DATA[0];
+      if (!t) return;
+
+      const setEl = function (id, txt) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = txt;
+      };
+      setEl(`ins-category`, t.category);
+      setEl(`ins-name`, t.name);
+      setEl(`ins-desc`, t.summary);
+      setEl(`ins-workflow`, t.workflow);
+      setEl(`ins-caveat`, t.caveat);
+      setEl(`ins-location`, t.location);
+      setEl(`ins-lift`, t.liftLabel);
+
+      const tagsEl = document.getElementById(`ins-tags`);
+      if (tagsEl) {
+        const accessTag = `<span class="tag ${t.access === `free` ? `tag-positive` : `tag-slate`}">${t.accessLabel}</span>`;
+        const extraTags = t.tags.map(function (tg) { return `<span class="tag">${tg}</span>`; }).join(``);
+        tagsEl.innerHTML = accessTag + extraTags;
+      }
+
+      const saveBtn = document.getElementById(`ins-save-btn`);
+      if (saveBtn) {
+        const isSaved = appState.savedIds.includes(t.id);
+        saveBtn.textContent = isSaved ? `Saved in Stack` : `+ Save to Stack`;
+        saveBtn.className = `btn btn-sm ${isSaved ? `btn-gold` : `btn-primary`}`;
+      }
+    }
+
+    function toggleSaveCurrentTool() {
+      if (appState.selectedToolId) {
+        toggleSaveItem(appState.selectedToolId);
+      }
+    }
+
+    // =========================================================================
+    // SECTION 03: BENCHMARK CHART & SKILLS REGISTRY
+    // =========================================================================
+    function switchChart(mode) {
+      appState.activeChart = mode;
+      [`survey`, `video`, `aeo`].forEach(function (m) {
+        const b = document.getElementById(`chart-btn-${m}`);
+        if (b) b.classList.toggle(`active`, m === mode);
+      });
+      renderBenchmarkChart();
+      persistState();
+    }
+
+    function renderBenchmarkChart() {
+      const canvas = document.getElementById(`benchmarkChart`);
+      if (!canvas || typeof Chart === `undefined`) return;
+
+      const c1 = getCssToken(`--data-1`);
+      const c2 = getCssToken(`--data-2`);
+      const c3 = getCssToken(`--data-3`);
+      const cCtx = getCssToken(`--data-context`);
+      const cInk = getCssToken(`--on-surface`);
+      const cMut = getCssToken(`--on-surface-variant`);
+      const cGrid = getCssToken(`--outline-variant`);
+      const fontLabel = getCssToken(`--font-label`);
+
+      const titleEl = document.getElementById(`chart-title`);
+      const subEl = document.getElementById(`chart-subtitle`);
+      const takeawayEl = document.getElementById(`chart-takeaway`);
+
+      let config = {};
+
+      if (appState.activeChart === `survey`) {
+        if (titleEl) titleEl.textContent = `Why Hallucinations Happen: Public LLM Survey`;
+        if (subEl) subEl.textContent = `What respondents believe ChatGPT does when answering a question (%)`;
+        if (takeawayEl) takeawayEl.textContent = `Only 28% know LLMs predict probable next tokens rather than looking up facts in a database (45%) or reading scripts (21%)—explaining why RAG tools like NotebookLM cut hallucinations dramatically.`;
+
+        config = {
+          type: `bar`,
+          data: {
+            labels: [`Database Lookup (Misconception)`, `Predicts Next Words (Correct)`, `Pre-Written Script (Misconception)`, `Other / Unsure`],
+            datasets: [{
+              label: `Share of Respondents (%)`,
+              data: [45, 28, 21, 6],
+              backgroundColor: [cCtx, c1, cCtx, cGrid],
+              borderRadius: 3
+            }]
+          },
+          options: {
+            indexAxis: `y`,
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) { return `${ctx.parsed.x}% of surveyed users`; }
+                }
+              }
+            },
+            scales: {
+              x: {
+                max: 60,
+                grid: { color: cGrid },
+                ticks: { color: cMut, font: { family: fontLabel, size: 11 }, callback: function (v) { return `${v}%`; } }
+              },
+              y: {
+                grid: { display: false },
+                ticks: { color: cInk, font: { family: fontLabel, size: 11 } }
+              }
+            }
+          }
+        };
+      } else if (appState.activeChart === `video`) {
+        if (titleEl) titleEl.textContent = `Text-to-Video Animation Consistency Tiers`;
+        if (subEl) subEl.textContent = `Head-to-head ranking across 9 frontier models (S=4, A=3, B=2, C=1)`;
+        if (takeawayEl) takeawayEl.textContent = `Sora 2 led text-to-video consistency (but blocks uploaded human faces), while Veo 3.1, Kling 2.6/3.0, and newcomer Grok Imagine excel for image-to-video and cinematic audio.`;
+
+        config = {
+          type: `bar`,
+          data: {
+            labels: [`Sora 2`, `Veo 3.1`, `Kling 2.6 / 3.0`, `Grok Imagine`, `Runway 4.5`, `LTX 2.0`, `Wan 2.6`, `Hailuo 2.3`, `Seedance 1.5`],
+            datasets: [{
+              label: `Benchmark Tier`,
+              data: [4, 3.5, 3.5, 3, 3, 3, 2, 1, 1],
+              backgroundColor: [c2, c1, c1, c3, c1, c1, cCtx, cCtx, cCtx],
+              borderRadius: 3
+            }]
+          },
+          options: {
+            indexAxis: `y`,
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    const map = { 4: `S-Tier (Most consistent T2V)`, 3.5: `A/S-Tier (Strong I2V & audio)`, 3: `A-Tier`, 2: `B-Tier`, 1: `C-Tier` };
+                    return map[ctx.parsed.x] || String(ctx.parsed.x);
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                min: 0,
+                max: 4.5,
+                grid: { color: cGrid },
+                ticks: {
+                  stepSize: 1,
+                  color: cMut,
+                  font: { family: fontLabel, size: 11 },
+                  callback: function (v) {
+                    const labels = { 1: `C-Tier`, 2: `B-Tier`, 3: `A-Tier`, 4: `S-Tier` };
+                    return labels[v] || ``;
+                  }
+                }
+              },
+              y: {
+                grid: { display: false },
+                ticks: { color: cInk, font: { family: fontLabel, size: 11 } }
+              }
+            }
+          }
+        };
+      } else {
+        if (titleEl) titleEl.textContent = `Answer Engine Optimization (AEO) Signals`;
+        if (subEl) subEl.textContent = `Observed citation & discovery shares reported in HubSpot AEO testing (%)`;
+        if (takeawayEl) takeawayEl.textContent = `60–80% of AI answer citations pull from beyond Google's top 10 links via query fanout; listicles (35% in Futurepedia's audit) and YouTube transcripts drive outsized B2B-to-C visibility.`;
+
+        config = {
+          type: `bar`,
+          data: {
+            labels: [
+              `Sources Outside Google Top 10 (60–80% midpoint)`,
+              `Citations From Listicles (Audit)`,
+              `Listicle Share in Coding-Dir Gap Prompt`
+            ],
+            datasets: [{
+              label: `Share (%)`,
+              data: [70, 35, 50],
+              backgroundColor: [c1, c2, c3],
+              borderRadius: 3
+            }]
+          },
+          options: {
+            indexAxis: `y`,
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) { return `${ctx.parsed.x}%`; }
+                }
+              }
+            },
+            scales: {
+              x: {
+                max: 100,
+                grid: { color: cGrid },
+                ticks: { color: cMut, font: { family: fontLabel, size: 11 }, callback: function (v) { return `${v}%`; } }
+              },
+              y: {
+                grid: { display: false },
+                ticks: { color: cInk, font: { family: fontLabel, size: 11 } }
+              }
+            }
+          }
+        };
+      }
+
+      if (benchmarkChartInstance) {
+        benchmarkChartInstance.destroy();
+      }
+      benchmarkChartInstance = new Chart(canvas.getContext(`2d`), config);
+    }
+
+    function renderSkills() {
+      const container = document.getElementById(`skills-list`);
+      const filterEl = document.getElementById(`filter-skills`);
+      if (!container) return;
+
+      const q = filterEl ? filterEl.value.trim().toLowerCase() : ``;
+      const items = SKILLS_DATA.filter(function (s) {
+        if (!q) return true;
+        return `${s.name} ${s.role} ${s.platforms} ${s.summary} ${s.command}`.toLowerCase().includes(q);
+      });
+
+      if (items.length === 0) {
+        container.innerHTML = `<div class="empty-state"><strong>No matching skills</strong><p style="margin:0;color:var(--on-surface-variant);">Clear the skill search box to see all ${SKILLS_DATA.length} agent skills.</p></div>`;
+        return;
+      }
+
+      container.innerHTML = items.map(function (s) {
+        const isSaved = appState.savedIds.includes(s.id);
+        return `<div class="skill-row">
+          <div class="skill-row-top">
+            <div>
+              <strong style="font-family:var(--font-headline);font-size:1.05rem;">${s.name}</strong>
+              <span class="tag tag-slate" style="margin-left:var(--space-xs);">${s.role}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:var(--space-xs);">
+              <code class="skill-cmd">${s.command}</code>
+              <button type="button" class="btn btn-sm ${isSaved ? `btn-gold` : `btn-secondary`}" onclick="toggleSaveItem('${s.id}')">${isSaved ? `Saved` : `+ Stack`}</button>
+            </div>
+          </div>
+          <p style="margin:0;font-size:0.86rem;color:var(--on-surface-variant);">${s.summary}</p>
+          <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--space-xs);font-family:var(--font-label);font-size:0.72rem;color:var(--secondary);">
+            <span>Compatible: ${s.platforms}</span>
+            <span>Note: ${s.safety}</span>
+          </div>
+        </div>`;
+      }).join(``);
+    }
+
+    // =========================================================================
+    // SECTION 04: TECHNIQUES WORKBENCH & 7 LEVELS
+    // =========================================================================
+    function selectTechnique(tech, btnEl) {
+      appState.activeTech = tech;
+      const tabs = document.getElementById(`tech-tabs`);
+      if (tabs) {
+        tabs.querySelectorAll(`.chip-btn`).forEach(function (b) { b.classList.remove(`active`); });
+      }
+      if (btnEl) btnEl.classList.add(`active`);
+      renderTechniqueBody();
+      persistState();
+    }
+
+    function updateIccField(field, val) {
+      appState[field] = val;
+      const out = document.getElementById(`icc-preview`);
+      if (out) out.textContent = buildIccPrompt();
+      persistState();
+    }
+
+    function buildIccPrompt() {
+      return `INSTRUCTIONS:\n${appState.iccGoal || `[Define the exact task and action]`}\n\nCONTEXT:\n${appState.iccContext || `[Add your role, audience, background, or paste source data]`}\n\nCONSTRAINTS:\n${appState.iccConstraints || `[Specify length, tone, format, and rules]`}\n\nCONTEXT INTERVIEW:\nBefore producing the final output, ask me 5–8 targeted questions to gather any missing context you need to tailor this specifically to my situation. Wait for my answers first.`;
+    }
+
+    function setRigorLevel(val) {
+      appState.rigorLevel = Number(val);
+      renderTechniqueBody();
+      persistState();
+    }
+
+    function copyTextToClipboard(elementId, statusId) {
+      const el = document.getElementById(elementId);
+      const st = document.getElementById(statusId);
+      if (!el) return;
+      const text = el.textContent || ``;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          if (st) st.textContent = `Copied prompt to clipboard.`;
+        }).catch(function () {
+          if (st) st.textContent = `Select and copy the text box above.`;
+        });
+      } else if (st) {
+        st.textContent = `Select and copy the text box above.`;
+      }
+    }
+
+    function renderTechniqueBody() {
+      const body = document.getElementById(`tech-body`);
+      if (!body) return;
+
+      if (appState.activeTech === `icc`) {
+        body.innerHTML = `<div style="display:grid;gap:var(--space-md);">
+          <p style="margin:0;font-size:0.9rem;color:var(--on-surface-variant);">Complex prompt engineering is obsolete—give AI what a new employee needs: <strong>Instructions, Context, Constraints (ICC)</strong>, followed by a <strong>Context Interview</strong> so the model pulls out details you forgot.</p>
+          <div class="field-group">
+            <label class="field-label" for="inp-icc-goal">Instructions (Task &amp; Action)</label>
+            <input type="text" id="inp-icc-goal" class="input-control" value="${escapeAttr(appState.iccGoal)}" oninput="updateIccField('iccGoal', this.value)">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="inp-icc-ctx">Context (Role, Audience, Background)</label>
+            <input type="text" id="inp-icc-ctx" class="input-control" value="${escapeAttr(appState.iccContext)}" oninput="updateIccField('iccContext', this.value)">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="inp-icc-con">Constraints (Tone, Length, Format)</label>
+            <input type="text" id="inp-icc-con" class="input-control" value="${escapeAttr(appState.iccConstraints)}" oninput="updateIccField('iccConstraints', this.value)">
+          </div>
+          <div>
+            <span class="inspector-label">Generated Ready-to-Paste Prompt</span>
+            <pre class="prompt-output" id="icc-preview">${escapeHtml(buildIccPrompt())}</pre>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--space-md);">
+            <button type="button" class="btn btn-primary btn-sm" onclick="copyTextToClipboard('icc-preview', 'tech-copy-status')">Copy ICC Prompt</button>
+            <span class="status-msg" id="tech-copy-status"></span>
+          </div>
+        </div>`;
+      } else if (appState.activeTech === `grounding`) {
+        const promptText = `Step 1 — Expert Anchor Discovery:\nIdentify the top experts in [YOUR TOPIC] and the signature operating systems or frameworks they are known for. List their core books or resources, and specifically explain where these experts disagree with each other.\n\nStep 2 — Grounded Extraction:\nBased ONLY on these uploaded expert transcripts/PDFs, reconstruct their complete system step-by-step.\n\nStep 3 — RCEO Metaprompt Synthesis:\nSynthesize <expert_anchor> and <personal_context> into a single master execution prompt using the RCEO framework (Role, Instructions, Context, Examples, Constraints, Output Format). Do not execute yet—output only the master prompt for a clean session.`;
+        body.innerHTML = `<div style="display:grid;gap:var(--space-md);">
+          <p style="margin:0;font-size:0.9rem;color:var(--on-surface-variant);">Stop getting "internet-average" advice. Use the <strong>3-Step Grounding System</strong>: anchor on proven domain experts, extract your personal context, and synthesize both with XML tags before executing in a fresh chat.</p>
+          <pre class="prompt-output" id="rceo-preview">${escapeHtml(promptText)}</pre>
+          <div style="display:flex;align-items:center;gap:var(--space-md);">
+            <button type="button" class="btn btn-primary btn-sm" onclick="copyTextToClipboard('rceo-preview', 'tech-copy-status')">Copy 3-Step System</button>
+            <span class="status-msg" id="tech-copy-status"></span>
+          </div>
+        </div>`;
+      } else if (appState.activeTech === `verification`) {
+        const stakes = [
+          {
+            label: `1 · Everyday Question`,
+            stack: `Web Search + "Say I Don't Know" Permission`,
+            detail: `Models guess rather than admit ignorance. Enable web search ("Ground first, ask second") and instruct: "Use only the provided/searched facts; if not clearly supported, say I don't know."`,
+            prompt: `Based ONLY on the retrieved search results or provided text, answer the question below. Indicate a confidence level for each claim. If the answer is not clearly supported, say "I do not know based on these sources" instead of guessing.`
+          },
+          {
+            label: `2 · Important Research`,
+            stack: `NotebookLM RAG + Source Audit Prompts`,
+            detail: `Upload vetted PDFs, YouTube transcripts, and websites into NotebookLM so every claim carries a clickable inline citation, then run contradiction & blind-spot prompts.`,
+            prompt: `Looking only at the sources in this notebook, identify any areas where the sources disagree with each other and any clear contradictions or conflicting claims. Cite every source explicitly.`
+          },
+          {
+            label: `3 · Fact-Heavy / Complex Reasoning`,
+            stack: `Manual 4-Step Chain of Verification + The Auditor`,
+            detail: `DeepMind 2025 research showed ungrounded Chain-of-Thought builds convincing logic around lies. Separate generation from verification across a fresh chat, then send to a second LLM ("The Auditor") to critique.`,
+            prompt: `Step 2 Extract: Scan the draft above and extract all specific factual claims (dates, names, stats, technical details) into a numbered list of standalone verification questions.\nStep 3 Fresh Chat: Do NOT rely on internal training data. Use search to verify each numbered question individually, note conflicts, and cite URLs.\nStep 4 Regenerate: Using ONLY the verified answers above, rewrite the final response.`
+          },
+          {
+            label: `4 · Mission Critical Decisions`,
+            stack: `Full Stack: RAG + Chain of Verification + LLM Council`,
+            detail: `Run the prompt simultaneously through ChatGPT, Claude, Gemini, and Grok (via ChatHub or Karpathy's GitHub LLM Council), anonymize outputs to avoid brand bias, and have a chairman model surface disagreements.`,
+            prompt: `You are an anonymous Auditor / Chairman. Compare Responses A, B, C, and D below without knowing which model wrote them. Identify every factual contradiction, hidden assumption, and reasoning variance, then synthesize the safest consensus recommendation.`
+          }
+        ];
+        const s = stakes[appState.rigorLevel] || stakes[2];
+        body.innerHTML = `<div style="display:grid;gap:var(--space-md);">
+          <p style="margin:0;font-size:0.9rem;color:var(--on-surface-variant);">Match verification rigor to the stakes of the task. Slide to select your stakes level:</p>
+          <div class="field-group">
+            <label class="field-label" for="rigor-slider">Decision Stakes Level: <strong style="color:var(--secondary);">${s.label}</strong></label>
+            <input type="range" id="rigor-slider" min="0" max="3" step="1" value="${appState.rigorLevel}" oninput="setRigorLevel(this.value)" style="width:100%;accent-color:var(--secondary);">
+          </div>
+          <div class="inspector-box">
+            <span class="inspector-label">Recommended Toolbox: ${s.stack}</span>
+            <p style="margin:0;font-size:0.9rem;">${s.detail}</p>
+          </div>
+          <pre class="prompt-output" id="verif-preview">${escapeHtml(s.prompt)}</pre>
+          <div style="display:flex;align-items:center;gap:var(--space-md);">
+            <button type="button" class="btn btn-primary btn-sm" onclick="copyTextToClipboard('verif-preview', 'tech-copy-status')">Copy Verification Prompt</button>
+            <span class="status-msg" id="tech-copy-status"></span>
+          </div>
+        </div>`;
+      } else if (appState.activeTech === `notebook_audit`) {
+        const auditText = `1. Contradictions Check:\nLooking only at the sources in this notebook, identify any areas where the sources disagree with each other and any clear contradictions or conflicting claims.\n\n2. Blind-Spot Audit:\nBased on these sources, what important questions or subtopics about [TOPIC] are missing or barely covered? List the biggest gaps needed to truly understand this topic. Do not invent details; describe only what is missing.\n\n3. Contrarian Perspectives:\nAre there any contrarian, alternative, or lesser-known viewpoints on [TOPIC] not represented in these sources? Describe those viewpoints at a high level and suggest reputable sources to balance the notebook.`;
+        body.innerHTML = `<div style="display:grid;gap:var(--space-md);">
+          <p style="margin:0;font-size:0.9rem;color:var(--on-surface-variant);">RAG fails if your uploaded sources are biased or incomplete. Run these 3 NotebookLM audit prompts before writing or building—and click <em>Save to Note → Convert to Source</em> on the outputs.</p>
+          <pre class="prompt-output" id="audit-preview">${escapeHtml(auditText)}</pre>
+          <div style="display:flex;align-items:center;gap:var(--space-md);">
+            <button type="button" class="btn btn-primary btn-sm" onclick="copyTextToClipboard('audit-preview', 'tech-copy-status')">Copy 3 Audit Prompts</button>
+            <span class="status-msg" id="tech-copy-status"></span>
+          </div>
+        </div>`;
+      } else {
+        body.innerHTML = `<div style="display:grid;gap:var(--space-md);">
+          <p style="margin:0;font-size:0.9rem;color:var(--on-surface-variant);"><strong>Answer Engine Optimization (AEO)</strong> shifts from ranking short SEO keywords to becoming the trusted answer in <strong>B2B-to-C</strong> (Business-to-Bot-to-Consumer) research.</p>
+          <div class="tools-grid">
+            <div class="inspector-box">
+              <span class="inspector-label">Why AEO Converts 3–5× Higher</span>
+              <p style="margin:0;font-size:0.875rem;">Prospects ask multi-turn follow-ups inside ChatGPT/Gemini/Perplexity to rule out competitors before ever clicking your site.</p>
+            </div>
+            <div class="inspector-box">
+              <span class="inspector-label">Query Fanout &amp; Top Channels</span>
+              <p style="margin:0;font-size:0.875rem;">AI breaks one question into 10+ sub-queries, pulling 60–80% of citations beyond Google Top 10—heavily favoring third-party listicles (35%), YouTube transcripts, Reddit, and clear FAQs.</p>
+            </div>
+          </div>
+          <pre class="prompt-output" id="aeo-preview">AEO Self-Audit Checklist:
+1. Test buyer-journey questions in a temporary/incognito AI account (no personal memory bias).
+2. Log which competitors are named, how your brand is described, and which 10+ sources are cited.
+3. Publish direct FAQ/help-center pages answering full natural-language questions, build YouTube explainers (automatically indexed transcripts), and pitch inclusion in cited comparison listicles.</pre>
+          <div style="display:flex;align-items:center;gap:var(--space-md);">
+            <button type="button" class="btn btn-primary btn-sm" onclick="copyTextToClipboard('aeo-preview', 'tech-copy-status')">Copy AEO Checklist</button>
+            <span class="status-msg" id="tech-copy-status"></span>
+          </div>
+        </div>`;
+      }
+    }
+
+    function renderLevels() {
+      const grid = document.getElementById(`levels-grid`);
+      if (!grid) return;
+
+      grid.innerHTML = LEVELS_DATA.map(function (lv) {
+        const isActive = appState.activeLevelView === lv.level ? ` active` : ``;
+        const isMine = appState.userLevel === lv.level ? ` ★` : ``;
+        return `<button type="button" class="level-step${isActive}" onclick="viewLevel('${lv.level}')">
+          <span class="level-num">${lv.level}${isMine}</span>
+          <span style="font-size:0.78rem;font-weight:600;line-height:1.25;">${lv.title}</span>
+        </button>`;
+      }).join(``);
+
+      const current = LEVELS_DATA.find(function (l) { return l.level === appState.activeLevelView; }) || LEVELS_DATA[0];
+      const badge = document.getElementById(`lvl-badge`);
+      const title = document.getElementById(`lvl-title`);
+      const desc = document.getElementById(`lvl-desc`);
+      const action = document.getElementById(`lvl-action`);
+      const markBtn = document.getElementById(`lvl-mark-btn`);
+
+      if (badge) badge.textContent = `${current.level}${appState.userLevel === current.level ? ` · Your Current Stage` : ``}`;
+      if (title) title.textContent = current.title;
+      if (desc) desc.textContent = current.desc;
+      if (action) action.textContent = current.action;
+      if (markBtn) {
+        markBtn.textContent = appState.userLevel === current.level ? `Current Stage Saved` : `Set ${current.level} as My Level`;
+      }
+    }
+
+    function viewLevel(lvl) {
+      appState.activeLevelView = lvl;
+      renderLevels();
+      persistState();
+    }
+
+    function markCurrentLevel() {
+      appState.userLevel = appState.activeLevelView;
+      renderLevels();
+      updateKPIs();
+      persistState();
+    }
+
+    // =========================================================================
+    // SECTION 05: SAVED STACK & FILE EXPORT
+    // =========================================================================
+    function toggleSaveItem(id) {
+      const idx = appState.savedIds.indexOf(id);
+      if (idx >= 0) {
+        appState.savedIds.splice(idx, 1);
+      } else {
+        appState.savedIds.push(id);
+      }
+      renderTools();
+      renderInspector();
+      renderSkills();
+      renderStack();
+      updateKPIs();
+      persistState();
+    }
+
+    function renderStack() {
+      const container = document.getElementById(`stack-items-container`);
+      if (!container) return;
+
+      if (appState.savedIds.length === 0) {
+        container.innerHTML = `<div class="empty-state">
+          <strong>Your personal AI stack is empty</strong>
+          <p style="margin:0;color:var(--on-surface-variant);">Click <strong>+ Stack</strong> on any tool or skill above, or load a starter preset below to assemble your custom implementation brief.</p>
+        </div>`;
+        return;
+      }
+
+      const cards = appState.savedIds.map(function (id) {
+        const t = TOOLS_DATA.find(function (x) { return x.id === id; });
+        const s = SKILLS_DATA.find(function (x) { return x.id === id; });
+        const item = t || s;
+        if (!item) return ``;
+        const kind = t ? t.category : `Agent Skill`;
+        return `<div class="stack-pill-card">
+          <div>
+            <strong style="font-size:0.92rem;">${item.name}</strong>
+            <div style="font-family:var(--font-label);font-size:0.72rem;color:var(--secondary);">${kind}</div>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="toggleSaveItem('${id}')" aria-label="Remove ${escapeAttr(item.name)}">Remove</button>
+        </div>`;
+      }).join(``);
+
+      container.innerHTML = `<div class="stack-items-grid">${cards}</div>`;
+    }
+
+    function handleNotesChange(val) {
+      appState.notes = val;
+      persistState();
+    }
+
+    function loadStarterPreset(preset) {
+      if (preset === `creator`) {
+        appState.savedIds = [`claude-chat-projects`, `claude-design`, `notebooklm`, `higgsfield-artlist`, `veo-31`, `granola`, `skill-humanizer`, `skill-remotion`];
+      } else {
+        appState.savedIds = [`chatgpt-work`, `zapier-agents`, `n8n`, `google-ai-studio`, `granola`, `wispr-flow`, `hubspot-aeo`, `skill-inspector`];
+      }
+      renderTools();
+      renderInspector();
+      renderSkills();
+      renderStack();
+      updateKPIs();
+      persistState();
+      const st = document.getElementById(`stack-status`);
+      if (st) st.textContent = `Loaded ${preset === `creator` ? `Creator` : `Business Ops`} preset.`;
+    }
+
+    function resetSavedData(btn) {
+      if (!btn) return;
+      if (btn.dataset.armed !== `true`) {
+        btn.dataset.armed = `true`;
+        btn.textContent = `Click again to confirm reset`;
+        setTimeout(function () {
+          if (btn.dataset.armed === `true`) {
+            btn.dataset.armed = `false`;
+            btn.textContent = `Reset Saved Data`;
+          }
+        }, 4000);
+        return;
+      }
+      btn.dataset.armed = `false`;
+      btn.textContent = `Reset Saved Data`;
+      appState.savedIds = [];
+      appState.notes = ``;
+      appState.userLevel = `L1`;
+      appState.activeLevelView = `L1`;
+      const notesEl = document.getElementById(`stack-notes`);
+      if (notesEl) notesEl.value = ``;
+      renderTools();
+      renderInspector();
+      renderSkills();
+      renderLevels();
+      renderStack();
+      updateKPIs();
+      persistState();
+      const st = document.getElementById(`stack-status`);
+      if (st) st.textContent = `Saved stack and notes cleared.`;
+    }
+
+    function exportStackBrief() {
+      const lines = [
+        `2026 AI STACK & IMPLEMENTATION BRIEF`,
+        `====================================`,
+        `Current AI Maturity Level: ${appState.userLevel}`,
+        `Primary Ecosystem Focus: ${appState.recGoal} (${appState.recComfort})`,
+        ``,
+        `SAVED TOOLS & AGENT SKILLS (${appState.savedIds.length}):`
+      ];
+
+      if (appState.savedIds.length === 0) {
+        lines.push(`- None selected yet.`);
+      } else {
+        appState.savedIds.forEach(function (id) {
+          const t = TOOLS_DATA.find(function (x) { return x.id === id; });
+          const s = SKILLS_DATA.find(function (x) { return x.id === id; });
+          if (t) {
+            lines.push(`- [Tool] ${t.name} (${t.category}) — ${t.summary}`);
+          } else if (s) {
+            lines.push(`- [Skill] ${s.name} (${s.command}) — ${s.summary}`);
+          }
+        });
+      }
+
+      lines.push(``);
+      lines.push(`IMPLEMENTATION NOTES:`);
+      lines.push(appState.notes ? appState.notes : `(No notes added yet)`);
+      lines.push(``);
+      lines.push(`NEXT ACTION: Pick 1 repetitive daily task, run a Context Interview, and build or automate it this week.`);
+
+      const content = lines.join(`\n`);
+      if (window.notebookAppApi && typeof window.notebookAppApi.triggerFileDownload === `function`) {
+        window.notebookAppApi.triggerFileDownload({
+          content: content,
+          contentType: `text/plain`,
+          encoding: `UTF-8`,
+          filename: `ai-stack-brief-2026.txt`
+        });
+        const st = document.getElementById(`stack-status`);
+        if (st) st.textContent = `Exported ai-stack-brief-2026.txt.`;
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, `&amp;`)
+        .replace(/</g, `&lt;`)
+        .replace(/>/g, `&gt;`);
+    }
+
+    function escapeAttr(str) {
+      return String(str)
+        .replace(/&/g, `&amp;`)
+        .replace(/"/g, `&quot;`)
+        .replace(/</g, `&lt;`)
+        .replace(/>/g, `&gt;`);
+    }
+
+    // =========================================================================
+    // INITIALIZATION
+    // =========================================================================
+    async function initApp() {
+      if (window.notebookAppApi && typeof window.notebookAppApi.getAppState === `function`) {
+        try {
+          const saved = await window.notebookAppApi.getAppState();
+          if (saved && typeof saved === `object`) {
+            appState = Object.assign({}, DEFAULT_STATE, saved);
+            if (!Array.isArray(appState.savedIds)) appState.savedIds = [];
+          }
+        } catch (err) {
+          // Proceed with defaults
+        }
+      }
+
+      const goalEl = document.getElementById(`rec-goal`);
+      const comfortEl = document.getElementById(`rec-comfort`);
+      const notesEl = document.getElementById(`stack-notes`);
+      const viewBtn = document.getElementById(`toggle-view-btn`);
+
+      if (goalEl) goalEl.value = appState.recGoal;
+      if (comfortEl) comfortEl.value = appState.recComfort;
+      if (notesEl) notesEl.value = appState.notes || ``;
+      if (viewBtn) viewBtn.textContent = appState.directoryView === `grid` ? `Table View` : `Card View`;
+
+      updateRecommendation();
+      renderCategoryChips();
+      renderTools();
+      renderInspector();
+      switchChart(appState.activeChart || `survey`);
+      renderSkills();
+      renderTechniqueBody();
+      renderLevels();
+      renderStack();
+      updateKPIs();
+
+      if (typeof lucide !== `undefined` && typeof lucide.createIcons === `function`) {
+        lucide.createIcons();
+      }
+      if (window.notebookAppApi && typeof window.notebookAppApi.notifyAppReady === `function`) {
+        window.notebookAppApi.notifyAppReady();
+      }
+    }
+
+    document.addEventListener(`DOMContentLoaded`, initApp);
+  </script>
+</body>
+</html>
