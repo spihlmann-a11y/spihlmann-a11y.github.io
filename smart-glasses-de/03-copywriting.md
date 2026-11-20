@@ -1,50 +1,81 @@
-# Marketing Copy: AuraVision G1 Smart Glasses
+# Marketing Copy: Camera-Free Prescription Smart Glasses (Germany)
+
+*Based solely on `02-strategy.md`. Product name not yet defined in the strategy, so it is referred to as "our glasses" below. Primary audience: prescription-glasses wearers who are hard of hearing (warm, clear, reassuring tone). Secondary: multilingual professionals and business travellers (calm, factual, trust-led tone).*
+
+---
 
 ## Slogan
-**Intelligence in Plain Sight. Zero Privacy Compromise.**
+
+**Understand everyone. Film no one.**
+
+German version: **Alle verstehen. Niemanden filmen.**
+
+---
 
 ## Website Copy
 
-### Hero Section
-* **Main Headline**: The Smart Glasses Built for the German Boardroom and Beyond.
-* **Sub-Headline**: Experience instant teleprompting, live translation, and subtle heads-up alerts on a featherweight titanium frame. No intrusive cameras, 100% GDPR compliant, and engineered for German professionals.
-* **Primary Call to Action (CTA)**: Reserve Your Founder Edition
-* **Secondary CTA**: Explore Corporate Privacy Specs
+### Hero
+
+**Headline:**
+Follow every conversation, right in your own glasses.
+
+**Subheadline:**
+Prescription smart glasses that show live subtitles and translation in your field of view. No camera. Nothing the people around you say is stored or used to train AI.
+
+**Supporting line (under the hero image):**
+Fitted by your optician. Built for German conversations. Processed on the device or in the EU.
 
 ---
 
-### Core Value Propositions (Features & Selling Points)
+### Core Selling Points
 
-#### 1. 100% Camera-Free & Works Council Compliant
-* **Heading**: Focus on Work, Not Privacy Inquiries.
-* **Copy**: Unlike conventional smart glasses that record bystanders and trigger office bans, AuraVision G1 features zero optical cameras or audio eavesdropping. It is fully compliant with GDPR and German *Betriebsrat* (Works Council) workplace regulations. Wear it freely into client boardrooms, production floors, and sensitive negotiations without friction.
+**1. See what people say, as they say it**
+At the dinner table, at the pharmacy counter, in a busy meeting: our glasses show live subtitles of the conversation directly in your field of view. You keep looking at the person you are talking to, not at a phone screen. Need another language? Live translation works the same way, so you can follow a meeting, a trade fair or a trip abroad.
 
-#### 2. Invisible Micro-LED Optical Heads-Up Display
-* **Heading**: Information Floating in Your Natural Line of Sight.
-* **Copy**: Powered by a dual-eye monochrome green waveguide display, your critical notes, speech teleprompter cues, and turn-by-turn navigation float discreetly at infinite focus. Only you can see the display—it remains entirely invisible to observers sitting directly across from you.
+**2. No camera. Not hidden, not switched off, simply not there.**
+Our glasses cannot film anyone, because there is no camera in the hardware. Your family, your colleagues and the people you meet can relax around you. Audio is processed in real time for subtitles and translation and is not stored by default, and what other people say is never used to train AI. We publish a privacy whitepaper and a summary of our data protection impact assessment, so you can check our promise rather than just trust it.
 
-#### 3. Real-Time Multilingual Translation & Teleprompting
-* **Heading**: Speak With Unwavering Confidence Across European Markets.
-* **Copy**: Deliver high-stakes keynote presentations without ever looking down at cue cards. In cross-border negotiations, read live real-time German-to-English or French-to-German text translations floating seamlessly beside your conversation partner.
+**3. Your prescription, fitted by your optician**
+Our glasses are designed around prescription lenses from day one. You get them where you already buy your glasses: from your optician, with proper fitting and personal advice. No compromise between seeing well and understanding well.
 
-#### 4. Master Optician Prescription Support & Bauhaus Titanium Craftsmanship
-* **Heading**: German Optical Precision Meets Ultralight Design.
-* **Copy**: Weighing just 38 grams, AuraVision G1 is forged from hypoallergenic aerospace titanium. Designed in the minimalist Bauhaus tradition, it blends indistinguishably into high-end executive eyewear and pairs seamlessly with custom prescription lenses (*Sehstärke*) from top German optical partners including Fielmann and Apollo.
+**4. Made for German, with your data kept in the EU**
+Our communication AI is built German-first, for quality German subtitles in everyday conversations. Manuals, support, warranty and returns are all in German, too. Processing happens on the device or on EU hosting, with no data transfers to the US or China.
 
 ---
 
-### Primary Call to Action (CTA) Box
-* **Banner Headline**: Elevate Your Daily Focus with German Engineered Optical AI.
-* **Supporting Text**: Backed by a 30-day corporate trial, German customer support, and full GDPR compliance documentation.
-* **Button Text**: Pre-Order AuraVision G1 — €549
+### CTA
+
+**Primary CTA:**
+Try them at a partner optician near you.
+Button: **Find a partner optician**
+
+**Secondary CTA:**
+Want to know exactly how we handle data?
+Button: **Read our privacy whitepaper**
+
+**Closing line:**
+Smart glasses that help you understand people and never film them.
 
 ---
 
-## Presentation Key Points (Pitch Deck Outline)
-1. **The Problem**: Smart eyewear adoption in Germany has hit a wall because consumers and corporate Works Councils reject intrusive cameras and potential privacy violations under strict GDPR laws.
-2. **The Problem**: Professionals suffer from smartphone notification fatigue and disjointed eye contact during crucial executive meetings and client presentations.
-3. **The Solution**: AuraVision G1 provides an ultra-lightweight, camera-free optical heads-up display built directly into premium everyday prescription eyewear.
-4. **The Differentiation**: By eliminating cameras entirely and utilizing a micro-LED waveguide display, AuraVision G1 is the only smart glass 100% certified for German corporate workplace use.
-5. **The Differentiation**: Forged in 38g minimalist titanium with native prescription lens compatibility through Germany's top optician networks (Fielmann / Apollo).
-6. **The User Benefit**: Professionals gain hands-free teleprompting, real-time live multilingual translation, and glanceable navigation while maintaining complete presence and trust.
-7. **The Commercial Opportunity**: Capturing Germany's high-income knowledge worker base first, followed by European enterprise expansion across DACH corporate sectors.
+## Pitch Deck Key Points
+
+*Order: Problem > Solution > Differentiation > Benefits*
+
+1. **Problem:** About two thirds of German adults wear glasses, and many of them struggle to follow conversations because of hearing loss or a language barrier.
+2. **Problem:** Today's smart glasses are built around cameras, and Germans do not want them: 76% reject being filmed unnoticed, and 62% would not let a smart-glasses wearer into their home.
+3. **Solution:** Camera-free prescription smart glasses that show live subtitles and translation in the wearer's field of view.
+4. **Differentiation:** Privacy we can verify: no camera in the hardware, audio not stored by default, bystander data never used for AI training, and a published privacy whitepaper and DPIA summary.
+5. **Differentiation:** German-first communication AI and EU data sovereignty: processing on the device or on EU hosting, with no US or China transfers.
+6. **Differentiation:** Built for prescription lenses and sold through opticians, where our first customers already buy and get advice.
+7. **Benefit for wearers:** Follow every conversation while looking at people, not at a screen, without making anyone around you uncomfortable.
+8. **Benefit for opticians:** A smart-glasses category you can sell without the camera controversy.
+
+---
+
+*Copy notes for review (not for publication):*
+- "About two thirds of German adults wear glasses" is an industry estimate not verified for 2026 (per the strategy). The size of the hard-of-hearing glasses-wearer segment is unknown, so no figure is given for it.
+- No price, accuracy figures, language counts or insurance reimbursement are mentioned, because the strategy document marks these as unresolved.
+- The listening indicator and the § 201 StGB legal opinion are still open items in the strategy. Do not add claims about them until legal review is complete.
+- The privacy whitepaper and DPIA summary are Phase 0 deliverables. The "Read our privacy whitepaper" CTA should only go live once they are published.
+- The opticians line is adapted from the strategy's "without legal exposure". It was softened to "without the camera controversy" because the microphone-related legal review is still pending.
