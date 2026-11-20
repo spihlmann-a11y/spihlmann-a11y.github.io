@@ -1,1 +1,2 @@
 Extra Credit Challenge
+yolo26_webcam_standalone.html is to big for github-Upload
