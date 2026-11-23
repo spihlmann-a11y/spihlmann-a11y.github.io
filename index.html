@@ -371,5 +371,29 @@
             }
         });
     </script>
+<link href="https://cdn.jsdelivr.net/npm/@n8n/chat/style.css" rel="stylesheet" />
+<script type="module">
+  import { createChat } from 'https://cdn.jsdelivr.net/npm/@n8n/chat/chat.bundle.es.js';
+
+  createChat({
+    webhookUrl: 'https://spihlmann-a11y.app.n8n.cloud/webhook/d41bf6b9-597d-454c-96b0-b30deb2ad890/chat',
+    mode: 'window',
+    showWelcomeScreen: false,
+    defaultLanguage: 'en',
+    initialMessages: [
+      'Hallo! 👋',
+      'Ich bin dein KI-Assistent. Hast du Fragen?'
+    ],
+    i18n: {
+      en: {
+        title: 'Mein AI ChatBOT',
+        subtitle: '',
+        footer: '',
+        getStarted: 'Neue Unterhaltung',
+        inputPlaceholder: 'Deine Frage...'
+      }
+    }
+  });
+</script>
 </body>
 </html>
