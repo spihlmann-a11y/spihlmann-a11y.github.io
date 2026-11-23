@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>StarryNightRide</title>
+<style>
+/* VOICE: a night painting you can ride through; quiet UI that stays out of the canvas
+   IDEA: the screen is a wet oil canvas; the HUD is a small brass plaque on the frame
+   PICTURE: the full-bleed real-time painting
+   COLOUR and TYPE: ultramarine night, chrome-yellow accents; Cormorant Garamond + system sans
+   LAYOUT: plaque top-left, controls top-right, touch joystick bottom-left, jump bottom-right */
+html,body{margin:0;height:100%;overflow:hidden;background:#0b1440;touch-action:none;-webkit-user-select:none;user-select:none}
+canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block;cursor:grab}
+canvas:active{cursor:grabbing}
+.ui{position:fixed;z-index:3;font:13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;color:#f3e3a6}
+#plaque{top:12px;left:12px;padding:10px 14px;background:rgba(10,18,55,.62);border:1px solid rgba(243,210,110,.35);border-radius:10px;max-width:min(420px,70vw);backdrop-filter:blur(3px)}
+#plaque h1{margin:0 0 2px;font:600 22px/1.05 "Cormorant Garamond",Georgia,serif;letter-spacing:.02em;color:#f7d76a}
+#plaque p{margin:2px 0 0;color:#cfd8f5;font-size:12.5px}
+#mode{color:#f7d76a}
+#btns{top:12px;right:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:60vw}
+#btns button{min-height:40px;padding:0 14px;border-radius:10px;border:1px solid rgba(243,210,110,.45);background:rgba(10,18,55,.66);color:#f3e3a6;font:600 13px system-ui,sans-serif;cursor:pointer}
+#btns button[aria-pressed=true]{background:#e8b93a;color:#10183f}
+#btns button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+#stats{bottom:10px;left:50%;transform:translateX(-50%);font:11px/1.3 ui-monospace,Menlo,monospace;color:#aab6e0;background:rgba(10,18,55,.45);padding:4px 10px;border-radius:8px;white-space:nowrap}
+#joy{left:22px;bottom:34px;width:130px;height:130px;border-radius:50%;background:rgba(10,18,55,.35);border:2px solid rgba(243,210,110,.4);display:none;touch-action:none}
+#knob{position:absolute;left:41px;top:41px;width:48px;height:48px;border-radius:50%;background:rgba(243,210,110,.55);border:2px solid #f7d76a}
+#jump{right:26px;bottom:44px;width:86px;height:86px;border-radius:50%;background:rgba(232,185,58,.55);border:2px solid #f7d76a;display:none;align-items:center;justify-content:center;font:700 15px system-ui;color:#10183f;touch-action:none}
+body.touch #joy{display:block}body.touch #jump{display:flex}body.touch #keys{display:none}
+#loading{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at 60% 35%,#2a4fa8,#0b1440 70%);color:#f7d76a;font:600 28px/1.1 "Cormorant Garamond",Georgia,serif;text-align:center;padding:20px}
+#loading small{font:13px system-ui,sans-serif;color:#cfd8f5;margin-top:10px}
+#bar{width:min(320px,70vw);height:6px;border-radius:3px;background:rgba(255,255,255,.15);margin-top:14px;overflow:hidden}
+#bar i{display:block;height:100%;width:0;background:#f7d76a;transition:width .2s}
+.hide .ui:not(#btns){opacity:0;pointer-events:none}
+@media (max-width:600px){#plaque{max-width:56vw}#plaque p#keys{display:none}#plaque h1{font-size:19px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="plaque" class="ui"><h1>StarryNightRide</h1>
+<p id="keys">WASD ride · Shift gallop · Space jump · drag to look · wheel to zoom · T tour · F auto-ride · H hide</p>
+<p>Mode: <span id="mode">auto-ride</span></p></div>
+<div id="btns" class="ui">
+<button id="bTour" aria-pressed="false">Tour</button>
+<button id="bAuto" aria-pressed="true">Auto-ride</button>
+<button id="bHide" aria-pressed="false">Hide UI</button>
+</div>
+<div id="stats" class="ui"></div>
+<div id="joy" class="ui"><div id="knob"></div></div>
+<div id="jump" class="ui">JUMP</div>
+<div id="loading"><div>StarryNightRide</div><small id="ltext">Mixing paint…</small><div id="bar"><i id="lbar"></i></div></div>
+
+<script type="module">
+{
+// ======================================================================
+//  Settings
+// ======================================================================
+const QS = new URLSearchParams(location.search);
+const TEST = QS.has('test');
+const isTouch = (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) && !QS.has('desktop') || QS.has('mobile');
+if (isTouch) document.body.classList.add('touch');
+const Q = QS.has('q') ? parseFloat(QS.get('q')) : (isTouch ? 0.36 : 1.0); // stroke density factor
+const SQ = 1 / Math.sqrt(Q);
+const DPR = Math.min(window.devicePixelRatio || 1, isTouch ? 4 : 2);  // actual screen pixels
+const RAPIER_URLS = ['https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.21.0/dist/rapier.mjs',
+                     'https://unpkg.com/@dimforge/rapier3d-compat@0.21.0/dist/rapier.mjs'];
+
+// ======================================================================
+//  Small math
+// ======================================================================
+const TAU = Math.PI * 2;
+let _s = 1;
+const srand = s => { _s = s >>> 0; };
+function rnd() { _s = (_s + 0x6D2B79F5) | 0; let t = Math.imul(_s ^ (_s >>> 15), 1 | _s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
+const R = (a, b) => a + (b - a) * rnd();
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const mix = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const v3 = (x, y, z) => [x, y, z];
+const vadd = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const vsub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const vsc = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+const vdot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const vcross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const vlen = a => Math.hypot(a[0], a[1], a[2]);
+const vnorm = a => { const l = vlen(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const vlerp = (a, b, t) => [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)];
+const UP = [0, 1, 0];
+
+// mat4, column-major
+const m4 = () => { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; return m; };
+function mmul(a, b) { const o = new Float32Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; } return o; }
+const mT = (x, y, z) => { const m = m4(); m[12] = x; m[13] = y; m[14] = z; return m; };
+const mRx = t => { const c = Math.cos(t), s = Math.sin(t), m = m4(); m[5] = c; m[6] = s; m[9] = -s; m[10] = c; return m; };
+const mRy = t => { const c = Math.cos(t), s = Math.sin(t), m = m4(); m[0] = c; m[2] = -s; m[8] = s; m[10] = c; return m; };
+const mRz = t => { const c = Math.cos(t), s = Math.sin(t), m = m4(); m[0] = c; m[1] = s; m[4] = -s; m[5] = c; return m; };
+const mBasis = (x, y, z, o) => { const m = m4(); m.set([x[0], x[1], x[2], 0, y[0], y[1], y[2], 0, z[0], z[1], z[2], 0, o[0], o[1], o[2], 1]); return m; };
+const mul = (...ms) => ms.reduce((a, b) => mmul(a, b));
+const xform = (m, p) => [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
+function persp(fov, asp, n, f) { const t = 1 / Math.tan(fov / 2), m = new Float32Array(16); m[0] = t / asp; m[5] = t; m[10] = (f + n) / (n - f); m[11] = -1; m[14] = 2 * f * n / (n - f); return m; }
+function lookAt(e, c, up) { const z = vnorm(vsub(e, c)), x = vnorm(vcross(up, z)), y = vcross(z, x); const m = m4(); m.set([x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -vdot(x, e), -vdot(y, e), -vdot(z, e), 1]); return m; }
+
+// ======================================================================
+//  World layout (shared by JS generation, physics and GLSL grass)
+// ======================================================================
+const riverZ = x => -170 + 28 * Math.sin(x * 0.0125) + 10 * Math.sin(x * 0.031 + 1.0);
+const plateau = x => 24 * smooth(290, 298, x);
+function H(x, z) {
+  const r = Math.hypot(x, z);
+  let h = 6 * Math.sin(x * 0.011 + 0.5) * Math.sin(z * 0.013 + 1.2) + 3 * Math.sin(x * 0.027 + z * 0.019) + 1.5 * Math.sin(x * 0.061 - z * 0.047 + 2.0);
+  h *= mix(0.35, 1.0, smooth(70, 160, r));
+  h += Math.max(r - 320, 0) * 0.08;
+  const dr = Math.abs(z - riverZ(x));
+  h *= smooth(8, 45, dr);
+  h = mix(-2.8, h, smooth(5, 13, dr));
+  return h + plateau(x);
+}
+const waterLevel = x => -1.2 + plateau(x);
+function Hn(x, z) { const e = 0.6; return vnorm([H(x - e, z) - H(x + e, z), 2 * e, H(x, z - e) - H(x, z + e)]); }
+
+// bridge (perpendicular to the river at x=-15)
+const BR = (() => { const x = -15, z = riverZ(x); const dz = 28 * 0.0125 * Math.cos(x * 0.0125) + 10 * 0.031 * Math.cos(x * 0.031 + 1); const rd = vnorm([1, 0, dz]); const D = [rd[2], 0, -rd[0]]; return { c: [x, 0, z], D, half: 17.5, wid: 2.6 }; })();
+BR.a = vadd(BR.c, vsc(BR.D, -BR.half)); BR.b = vadd(BR.c, vsc(BR.D, BR.half));
+BR.ha = H(BR.a[0], BR.a[2]); BR.hb = H(BR.b[0], BR.b[2]);
+const deckY = s => mix(BR.ha, BR.hb, (s / BR.half + 1) / 2) + 1.8 * (1 - (s / BR.half) ** 2) + 0.15;
+function bridgeLocal(x, z) { const dx = x - BR.c[0], dz = z - BR.c[2]; return [dx * BR.D[0] + dz * BR.D[2], -dx * BR.D[2] + dz * BR.D[0]]; }
+
+const VILLAGE = [-70, -290];
+const CHURCH = [-98, -312];
+const ROADS = [
+  [[0, -60], [BR.a[0], BR.a[2]]], [[BR.a[0], BR.a[2]], [BR.b[0], BR.b[2]]], [[BR.b[0], BR.b[2]], VILLAGE],
+  [VILLAGE, [-125, -300]], [VILLAGE, [-35, -325]], [VILLAGE, [-60, -350]]
+];
+function segDist(px, pz, a, b) { const ax = b[0] - a[0], az = b[1] - a[1]; let t = ((px - a[0]) * ax + (pz - a[1]) * az) / (ax * ax + az * az); t = clamp(t, 0, 1); return Math.hypot(px - a[0] - ax * t, pz - a[1] - az * t); }
+function roadInfo(x, z) { let best = 1e9, dir = [1, 0]; for (const [a, b] of ROADS) { const d = segDist(x, z, a, b); if (d < best) { best = d; const l = Math.hypot(b[0] - a[0], b[1] - a[1]); dir = [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; } } return [best, dir]; }
+const WHEAT = [{ cx: 150, cz: 95, hw: 42, hd: 30, a: 0.3 }, { cx: -140, cz: 60, hw: 35, hd: 45, a: -0.2 }, { cx: 130, cz: -110, hw: 30, hd: 20, a: 0.5 }, { cx: -165, cz: -60, hw: 30, hd: 25, a: 0.1 }];
+function inWheat(x, z) { for (const w of WHEAT) { const c = Math.cos(w.a), s = Math.sin(w.a), dx = x - w.cx, dz = z - w.cz; const lx = dx * c + dz * s, lz = -dx * s + dz * c; if (Math.abs(lx) < w.hw && Math.abs(lz) < w.hd) return true; } return false; }
+const WINDMILL = [105, -25], COTTAGE = [82, -58];
+const BIGCYP = [-21, 44];
+
+// obstacles on the ring path (radius 60)
+const OBST = [];
+[22.5, 67.5, 112.5, 157.5, 202.5, 237.5, 302.5, 337.5].forEach((deg, i) => {
+  const th = deg * Math.PI / 180, cx = 60 * Math.cos(th), cz = 60 * Math.sin(th);
+  OBST.push({ th, type: ['fence', 'wall', 'log'][i % 3], c: [cx, H(cx, cz), cz], rd: [Math.cos(th), 0, Math.sin(th)], hl: 3.6, hh: 0.45, ht: 0.28 });
+});
+function groundHeight(x, z) {
+  let h = H(x, z);
+  const [s, t] = bridgeLocal(x, z);
+  if (Math.abs(s) < BR.half && Math.abs(t) < BR.wid + 0.2) h = Math.max(h, deckY(s));
+  return h;
+}
+
+// GLSL versions of the layout functions (for real-time grass)
+const f = n => "(" + (Math.round(n * 1e4) / 1e4).toFixed(4) + ")";
+const GLSL_WORLD = `
+float riverZ(float x){ return -170.0 + 28.0*sin(x*0.0125) + 10.0*sin(x*0.031+1.0); }
+float terrainH(float x, float z){
+  float r = sqrt(x*x+z*z);
+  float h = 6.0*sin(x*0.011+0.5)*sin(z*0.013+1.2) + 3.0*sin(x*0.027+z*0.019) + 1.5*sin(x*0.061-z*0.047+2.0);
+  h *= mix(0.35,1.0,smoothstep(70.0,160.0,r));
+  h += max(r-320.0,0.0)*0.08;
+  float dr = abs(z-riverZ(x));
+  h *= smoothstep(8.0,45.0,dr);
+  h = mix(-2.8,h,smoothstep(5.0,13.0,dr));
+  return h + 24.0*smoothstep(290.0,298.0,x);
+}
+float segD(vec2 p, vec2 a, vec2 b){ vec2 ab=b-a; float t=clamp(dot(p-a,ab)/dot(ab,ab),0.0,1.0); return length(p-a-ab*t); }
+float roadDist(vec2 p){ float d=1e9; ${ROADS.map(([a, b]) => `d=min(d,segD(p,vec2(${f(a[0])},${f(a[1])}),vec2(${f(b[0])},${f(b[1])})));`).join('')} return d; }
+bool inWheat(float x, float z){ ${WHEAT.map(w => `{ vec2 d=vec2(x-${f(w.cx)},z-${f(w.cz)}); float c=${f(Math.cos(w.a))}, s=${f(Math.sin(w.a))}; if(abs(d.x*c+d.y*s)<${f(w.hw)} && abs(-d.x*s+d.y*c)<${f(w.hd)}) return true; }`).join('')} return false; }
+`;
+
+// ======================================================================
+//  Palettes [highlight paint, shadow paint]
+// ======================================================================
+const PAL = {
+  meadow: [[0.30, 0.45, 0.40], [0.06, 0.12, 0.18]], meadow2: [[0.40, 0.50, 0.32], [0.09, 0.15, 0.17]],
+  field: [[0.33, 0.40, 0.26], [0.07, 0.11, 0.14]], path: [[0.66, 0.58, 0.42], [0.20, 0.19, 0.26]],
+  road: [[0.60, 0.53, 0.42], [0.19, 0.18, 0.25]], wheatG: [[0.72, 0.60, 0.32], [0.22, 0.20, 0.24]],
+  bank: [[0.38, 0.40, 0.38], [0.09, 0.11, 0.18]], rock: [[0.52, 0.52, 0.55], [0.13, 0.14, 0.22]],
+  village: [[0.46, 0.46, 0.40], [0.12, 0.13, 0.19]],
+  petal: [[0.98, 0.78, 0.22], [0.58, 0.46, 0.20]], seed: [[0.40, 0.25, 0.12], [0.10, 0.07, 0.07]],
+  stem: [[0.32, 0.44, 0.28], [0.06, 0.12, 0.12]], wheat: [[0.80, 0.68, 0.36], [0.25, 0.24, 0.27]],
+  cypress: [[0.13, 0.32, 0.26], [0.02, 0.06, 0.10]], cypress2: [[0.20, 0.36, 0.22], [0.03, 0.07, 0.09]],
+  tree: [[0.22, 0.40, 0.33], [0.05, 0.10, 0.14]], trunk: [[0.32, 0.24, 0.18], [0.08, 0.06, 0.08]],
+  wallW: [[0.66, 0.67, 0.62], [0.16, 0.19, 0.32]], wallO: [[0.70, 0.58, 0.38], [0.20, 0.17, 0.25]],
+  roofB: [[0.32, 0.32, 0.52], [0.07, 0.08, 0.20]], roofR: [[0.56, 0.32, 0.26], [0.14, 0.08, 0.14]],
+  steeple: [[0.22, 0.27, 0.50], [0.04, 0.06, 0.16]], frame: [[0.20, 0.16, 0.14], [0.05, 0.05, 0.08]],
+  plaster: [[0.66, 0.62, 0.52], [0.17, 0.17, 0.27]], wood: [[0.50, 0.38, 0.26], [0.12, 0.10, 0.13]],
+  cloth: [[0.80, 0.76, 0.64], [0.20, 0.22, 0.32]], stone: [[0.56, 0.55, 0.52], [0.15, 0.16, 0.24]],
+  bark: [[0.45, 0.32, 0.22], [0.11, 0.08, 0.09]], fence: [[0.58, 0.46, 0.32], [0.14, 0.11, 0.13]],
+  horse: [[0.60, 0.34, 0.18], [0.17, 0.09, 0.09]], mane: [[0.18, 0.10, 0.07], [0.04, 0.03, 0.04]],
+  saddle: [[0.45, 0.24, 0.12], [0.11, 0.06, 0.06]], blanket: [[0.62, 0.22, 0.15], [0.16, 0.05, 0.08]],
+  cloak: [[0.24, 0.42, 0.90], [0.04, 0.08, 0.30]], hat: [[0.48, 0.36, 0.22], [0.11, 0.08, 0.10]],
+  skin: [[0.86, 0.66, 0.52], [0.28, 0.20, 0.24]], trousers: [[0.26, 0.24, 0.30], [0.05, 0.05, 0.09]],
+  hoof: [[0.14, 0.11, 0.09], [0.03, 0.03, 0.04]], metal: [[0.30, 0.26, 0.20], [0.06, 0.05, 0.06]],
+  water: [[0.13, 0.27, 0.55], [0.05, 0.10, 0.28]], foam: [[0.85, 0.90, 0.95], [0.45, 0.55, 0.72]],
+};
+const GLOW = [1.0, 0.80, 0.34], GLOW2 = [1.0, 0.66, 0.22];
+
+// ======================================================================
+//  Stroke store: pos(3) w l rank | N(3) kind T(3) group | c0 aux c1 -
+//  kinds: 0 lit solid · 1 sky/halo flow · 2 water · 3 emissive · 4 lit foliage (sway) · 5 star pulse · 6 waterfall
+// ======================================================================
+const S = { n: 0, cap: 0, F: null, I: null, U: null };
+function sInit(cap) { S.cap = cap; S.n = 0; S.F = new Float32Array(cap * 6); S.I = new Int8Array(cap * 8); S.U = new Uint8Array(cap * 8); }
+function sGrow() { const nc = Math.ceil(S.cap * 1.5); const F = new Float32Array(nc * 6), I = new Int8Array(nc * 8), U = new Uint8Array(nc * 8); F.set(S.F); I.set(S.I); U.set(S.U); S.F = F; S.I = I; S.U = U; S.cap = nc; }
+const cb = v => v <= 0 ? 0 : v >= 1 ? 255 : Math.round(v * 255);
+function add(p, n, t, w, l, kind, group, c0, c1, aux = 0, cv = 0.05) {
+  if (S.n >= S.cap) sGrow();
+  let nx = n[0], ny = n[1], nz = n[2]; const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+  let tx = t[0], ty = t[1], tz = t[2]; let d = tx * nx + ty * ny + tz * nz; tx -= nx * d; ty -= ny * d; tz -= nz * d;
+  let tl = Math.hypot(tx, ty, tz);
+  if (tl < 1e-4) { if (Math.abs(ny) < 0.9) { tx = -nz; ty = 0; tz = nx; } else { tx = 1 - nx * nx; ty = -nx * ny; tz = -nx * nz; } tl = Math.hypot(tx, ty, tz) || 1; }
+  tx /= tl; ty /= tl; tz /= tl;
+  const i = S.n++, F = S.F, I = S.I, U = S.U, a = i * 6, b = i * 8;
+  F[a] = p[0]; F[a + 1] = p[1]; F[a + 2] = p[2]; F[a + 3] = w; F[a + 4] = l; F[a + 5] = rnd();
+  I[b] = Math.round(nx * 127); I[b + 1] = Math.round(ny * 127); I[b + 2] = Math.round(nz * 127); I[b + 3] = kind;
+  I[b + 4] = Math.round(tx * 127); I[b + 5] = Math.round(ty * 127); I[b + 6] = Math.round(tz * 127); I[b + 7] = group;
+  const v = (rnd() - 0.5) * cv * 2;
+  U[b] = cb(c0[0] + v + (rnd() - .5) * cv); U[b + 1] = cb(c0[1] + v + (rnd() - .5) * cv); U[b + 2] = cb(c0[2] + v + (rnd() - .5) * cv); U[b + 3] = cb(aux);
+  U[b + 4] = cb(c1[0] + v * 0.6); U[b + 5] = cb(c1[1] + v * 0.6); U[b + 6] = cb(c1[2] + v * 0.6);
+}
+const addP = (p, n, t, w, l, pal, kind = 0, group = 0, aux = 0) => add(p, n, t, w, l, kind, group, pal[0], pal[1], aux);
+
+// ---- shape samplers -------------------------------------------------
+function perp(a) { const t = Math.abs(a[1]) < 0.9 ? UP : [1, 0, 0]; const e1 = vnorm(vcross(a, t)); return [e1, vcross(a, e1)]; }
+function ellipsoid(g, c, r, count, pal, w, l, tanFn, kind = 0, aux = 0, rot = null, filter = null) {
+  count = Math.round(count);
+  for (let i = 0; i < count; i++) {
+    const u = R(-1, 1), ph = R(0, TAU), s = Math.sqrt(1 - u * u), dx = s * Math.cos(ph), dy = u, dz = s * Math.sin(ph);
+    let p = [dx * r[0], dy * r[1], dz * r[2]], n = [dx / r[0], dy / r[1], dz / r[2]];
+    if (filter && !filter(p)) continue;
+    let t = tanFn ? tanFn(p, n) : [R(-1, 1), R(-1, 1), R(-1, 1)];
+    if (rot) { p = xform(rot, p); n = xform(rot, n).map((v, k) => v - rot[12 + k]); t = xform(rot, t).map((v, k) => v - rot[12 + k]); }
+    addP(vadd(c, p), n, t, w * R(.8, 1.2), l * R(.8, 1.25), pal, kind, g, aux);
+  }
+}
+function tube(g, a, b, ra, rb, count, pal, w, l, kind = 0, aux = 0, along = true) {
+  const ax = vsub(b, a), L = vlen(ax), an = vsc(ax, 1 / L), [e1, e2] = perp(an);
+  count = Math.round(count);
+  for (let i = 0; i < count; i++) {
+    const t = rnd(), ph = R(0, TAU), rr = mix(ra, rb, t);
+    const dir = vadd(vsc(e1, Math.cos(ph)), vsc(e2, Math.sin(ph)));
+    const p = vadd(vadd(a, vsc(ax, t)), vsc(dir, rr));
+    const n = vadd(dir, vsc(an, (ra - rb) / L));
+    const tg = along ? vadd(an, vsc(vcross(an, dir), R(-.25, .25))) : vcross(an, dir);
+    addP(p, n, tg, w * R(.8, 1.2), l * R(.8, 1.2), pal, kind, g, aux);
+  }
+}
+function line(g, a, b, step, pal, w, kind = 0, n = UP, aux = 0) {
+  const d = vsub(b, a), L = vlen(d), k = Math.max(1, Math.ceil(L / step));
+  for (let i = 0; i < k; i++) { const p = vadd(a, vsc(d, (i + 0.5) / k)); addP(p, n, d, w, L / k * 1.5, pal, kind, g, aux); }
+}
+// random-filled planar face; o + U*s + V*t, s,t in [0,1]
+function face(g, o, U, V, N, pal, spacing, w, l, tan = 'u', kind = 0, aux = 0, filt = null, cvar = null) {
+  const area = vlen(vcross(U, V)), cnt = Math.round(area / (spacing * spacing));
+  const un = vnorm(U), vn = vnorm(V);
+  for (let i = 0; i < cnt; i++) {
+    const s = rnd(), t = rnd();
+    if (filt && !filt(s, t)) continue;
+    const p = vadd(o, vadd(vsc(U, s), vsc(V, t)));
+    const tg = tan === 'u' ? vadd(un, vsc(vn, R(-.2, .2))) : tan === 'v' ? vadd(vn, vsc(un, R(-.2, .2))) : (rnd() < .5 ? un : vn);
+    const pp = cvar ? cvar(s, t) : pal;
+    addP(vadd(p, vsc(N, R(0, 0.03))), N, tg, w * R(.8, 1.2), l * R(.8, 1.2), pp, kind, g, aux);
+  }
+}
+function box(g, c, hx, hy, hz, ex, ey, ez, pal, spacing, w, l, tan = 'u', skipBottom = true, kind = 0) {
+  const P = (a, b, cc) => vadd(c, vadd(vadd(vsc(ex, a), vsc(ey, b)), vsc(ez, cc)));
+  face(g, P(-hx, -hy, hz), vsc(ex, 2 * hx), vsc(ey, 2 * hy), ez, pal, spacing, w, l, tan, kind);
+  face(g, P(hx, -hy, -hz), vsc(ex, -2 * hx), vsc(ey, 2 * hy), vsc(ez, -1), pal, spacing, w, l, tan, kind);
+  face(g, P(hx, -hy, hz), vsc(ez, -2 * hz), vsc(ey, 2 * hy), ex, pal, spacing, w, l, tan, kind);
+  face(g, P(-hx, -hy, -hz), vsc(ez, 2 * hz), vsc(ey, 2 * hy), vsc(ex, -1), pal, spacing, w, l, tan, kind);
+  face(g, P(-hx, hy, hz), vsc(ex, 2 * hx), vsc(ez, -2 * hz), ey, pal, spacing, w, l, 'u', kind);
+  if (!skipBottom) face(g, P(-hx, -hy, -hz), vsc(ex, 2 * hx), vsc(ez, 2 * hz), vsc(ey, -1), pal, spacing, w, l, 'u', kind);
+}
+
+// ======================================================================
+//  Generators
+// ======================================================================
+const RS = 2800; // sky dome radius
+const MOON = vnorm([0.45, 0.36, -0.82]);
+const VORT = [
+  { a: vnorm([-0.22, 0.42, -0.88]), s: 1.6, r: 0.30 }, { a: vnorm([0.15, 0.62, -0.77]), s: -1.2, r: 0.20 },
+  { a: vnorm([-0.62, 0.30, -0.72]), s: 1.0, r: 0.17 }, { a: vnorm([0.80, 0.30, 0.50]), s: 1.2, r: 0.35 },
+  { a: vnorm([-0.70, 0.40, 0.58]), s: -1.0, r: 0.30 }, { a: vnorm([0.05, 0.85, 0.50]), s: 0.9, r: 0.35 },
+];
+const STARS = [[-0.62, 0.55, -0.56], [-0.35, 0.68, -0.64], [0.05, 0.74, -0.66], [0.22, 0.52, -0.82], [-0.82, 0.38, -0.42],
+  [-0.12, 0.26, -0.96], [0.70, 0.58, -0.40], [0.85, 0.40, 0.33], [-0.55, 0.62, 0.55], [0.25, 0.60, 0.76], [-0.90, 0.25, 0.30], [0.40, 0.88, 0.25]].map(vnorm);
+
+function genSky() {
+  srand(11);
+  const N = Math.round(170000 * Q);
+  const C = { ultra: [0.07, 0.13, 0.50], cobalt: [0.02, 0.28, 0.66], bg: [0.10, 0.42, 0.52], pale: [0.58, 0.72, 0.86], cream: [0.80, 0.84, 0.70], deep: [0.04, 0.08, 0.34] };
+  for (let i = 0; i < N; i++) {
+    const y = R(-0.06, 1), ph = R(0, TAU), s = Math.sqrt(1 - y * y);
+    const d = [s * Math.cos(ph), y, s * Math.sin(ph)];
+    // flow field: horizontal wind + vortices
+    const horiz = vnorm(vcross(UP, d));
+    let fl = vsc(horiz, 0.6 + 0.4 * Math.sin(ph * 3 + y * 9));
+    fl = vadd(fl, vsc(UP, 0.35 * Math.sin(ph * 5 + y * 12)));
+    let swirl = 0, band = 0;
+    for (const v of VORT) {
+      const ang = Math.acos(clamp(vdot(v.a, d), -1, 1)); const fo = Math.exp(-((ang / v.r) ** 2));
+      fl = vadd(fl, vsc(vcross(v.a, d), v.s * 3.2 * fo / Math.max(ang, 0.02) * v.r));
+      if (fo > 0.05) { const [e1, e2] = perp(v.a); const q = vsub(d, vsc(v.a, vdot(v.a, d))); const th = Math.atan2(vdot(q, e2), vdot(q, e1)); band = Math.max(band, fo * (0.5 + 0.5 * Math.sin(th * Math.sign(v.s) + Math.log(ang + 0.03) * 7))); swirl = Math.max(swirl, fo); }
+    }
+    fl = vsub(fl, vsc(d, vdot(fl, d)));
+    let col;
+    const e = clamp(y, 0, 1);
+    if (e < 0.16) col = vlerp(rnd() < .5 ? C.bg : C.pale, C.cobalt, e / 0.16 * R(.4, 1));
+    else col = vlerp(C.cobalt, rnd() < .5 ? C.ultra : C.deep, smooth(0.15, 0.9, e) * R(.5, 1.1));
+    if (rnd() < 0.18) col = vlerp(col, C.bg, R(.3, .8));
+    if (band > 0.55 && rnd() < band) col = vlerp(col, rnd() < .6 ? C.pale : C.cream, R(.4, .9) * band);
+    const p = vsc(d, RS * R(0.995, 1.0));
+    const w = R(14, 22) * SQ, l = R(55, 95) * SQ * (1 + swirl * 0.3);
+    add(p, vsc(d, -1), fl, w, l, 1, 0, col, col, R(0.5, 1), 0.035);
+  }
+}
+function ringStrokes(center, dir, r0, r1, step, w, l, colFn, kind, aux) {
+  const [e1, e2] = perp(dir);
+  for (let r = r0; r <= r1; r += step) {
+    const n = Math.round(TAU * r / (l * 0.55));
+    for (let i = 0; i < n; i++) {
+      const th = (i + rnd() * 0.5) / n * TAU, rr = r + R(-step * .3, step * .3);
+      const off = vadd(vsc(e1, Math.cos(th) * rr), vsc(e2, Math.sin(th) * rr));
+      const tg = vadd(vsc(e1, -Math.sin(th)), vsc(e2, Math.cos(th)));
+      const c = colFn(r, th);
+      add(vadd(center, off), vsc(dir, -1), tg, w * R(.8, 1.2), l * R(.8, 1.2), kind, 0, c, c, aux, 0.03);
+    }
+  }
+}
+function genMoonStars() {
+  srand(23);
+  // moon: golden-orange disc with concentric halos
+  const mc = vsc(MOON, RS * 0.96);
+  ringStrokes(mc, MOON, 6, 92, 9, 10, 26, (r) => r < 70 ? (rnd() < .5 ? [1.0, 0.70, 0.16] : [1.0, 0.82, 0.32]) : [0.98, 0.62, 0.14], 5, 0);
+  const halo = [[0.98, 0.84, 0.36], [0.88, 0.86, 0.58], [0.95, 0.74, 0.30], [0.55, 0.70, 0.78], [0.86, 0.82, 0.52], [0.40, 0.60, 0.78]];
+  ringStrokes(vsc(MOON, RS * 0.965), MOON, 104, 420, 13, 12, 36, (r) => { const k = Math.floor((r - 104) / 26); const c = halo[k % halo.length]; const fade = smooth(250, 430, r); return vlerp(c, [0.10, 0.30, 0.62], fade * 0.8); }, 1, 0.12);
+  // golden stars with rings and radiating bursts
+  STARS.forEach((d, i) => {
+    const big = i < 6 ? 1.25 : 1.0;
+    const c = vsc(d, RS * 0.97);
+    ringStrokes(c, d, 4, 30 * big, 7, 7, 17, () => rnd() < .5 ? [1, 0.97, 0.70] : [1, 0.88, 0.40], 5, 0);
+    ringStrokes(vsc(d, RS * 0.975), d, 40 * big, 105 * big, 13, 8, 24, (r) => { const k = Math.floor(r / 22) % 3; return [[0.97, 0.86, 0.40], [0.70, 0.80, 0.82], [0.95, 0.78, 0.30]][k]; }, 1, 0.2);
+    const [e1, e2] = perp(d);
+    const nr = 18 + (i % 3) * 4;
+    for (let k = 0; k < nr; k++) {
+      const th = k / nr * TAU + R(-.05, .05); const dir = vadd(vsc(e1, Math.cos(th)), vsc(e2, Math.sin(th)));
+      const len = R(60, 130) * big;
+      for (let s = 0; s < 3; s++) add(vadd(c, vsc(dir, 30 * big + len * (s + 0.5) / 3)), vsc(d, -1), dir, 5, len / 3 * 1.3, 5, 0, [1, 0.86, 0.40], [1, 0.86, 0.4], 0, 0.04);
+    }
+  });
+  // small stars
+  for (let i = 0; i < 520 * Math.max(Q, 0.5); i++) {
+    const y = R(0.08, 1), ph = R(0, TAU), s = Math.sqrt(1 - y * y); const d = [s * Math.cos(ph), y, s * Math.sin(ph)];
+    const c = vsc(d, RS * 0.98), [e1, e2] = perp(d);
+    for (let k = 0; k < 5; k++) { const th = R(0, TAU); const off = vadd(vsc(e1, Math.cos(th) * R(0, 6)), vsc(e2, Math.sin(th) * R(0, 6))); add(vadd(c, off), vsc(d, -1), vadd(vsc(e1, R(-1, 1)), vsc(e2, R(-1, 1))), 6, 12, 5, 0, [1, 0.93, 0.6], [1, 0.9, 0.6], 0, 0.05); }
+  }
+}
+
+// mountains: three layers, each with a solid silhouette mesh
+const MTN = [{ R: 900, base: 60, amp: 70, pal: [[0.20, 0.30, 0.48], [0.09, 0.15, 0.34]], under: [0.09, 0.14, 0.30] },
+             { R: 1350, base: 120, amp: 120, pal: [[0.28, 0.38, 0.60], [0.13, 0.19, 0.42]], under: [0.13, 0.19, 0.40] },
+             { R: 1950, base: 220, amp: 230, pal: [[0.38, 0.46, 0.70], [0.18, 0.25, 0.50]], under: [0.18, 0.25, 0.48] }];
+const ridge = (L, az) => { const m = MTN[L]; return m.base + m.amp * (0.5 + 0.5 * (0.55 * Math.sin(az * 3 + L * 1.7) + 0.3 * Math.sin(az * 7.3 + L * 2.1) + 0.15 * Math.sin(az * 17 + L * 4.0))); };
+function genMountains() {
+  srand(37);
+  MTN.forEach((m, L) => {
+    const cnt = Math.round(21000 * Q);
+    const sz = m.R * 0.024 * SQ;
+    for (let i = 0; i < cnt; i++) {
+      const az = R(0, TAU), hm = ridge(L, az), v = rnd(), y = v * hm - 60 * (1 - v);
+      const rd = [Math.cos(az), 0, Math.sin(az)], tgA = [-Math.sin(az), 0, Math.cos(az)];
+      const slope = (ridge(L, az + 0.004) - ridge(L, az - 0.004)) / (0.008 * m.R);
+      const p = vadd(vsc(rd, m.R * (1 + (1 - v) * 0.02)), [0, y, 0]);
+      const n = vnorm(vadd(vadd(vsc(rd, -0.75), [0, 0.65, 0]), vsc(tgA, slope * 0.5)));
+      let pal = m.pal;
+      if (L === 2 && y > hm * (0.66 + 0.08 * Math.sin(az * 23))) pal = [[0.90, 0.93, 1.0], [0.48, 0.56, 0.78]];
+      else if (L === 1 && y > hm * 0.86 && rnd() < .4) pal = [[0.62, 0.68, 0.82], [0.25, 0.32, 0.50]];
+      const tg = vadd(vsc(tgA, 1), [0, R(-0.6, 0.6) + slope, 0]);
+      addP(p, n, tg, sz * 0.4 * R(.8, 1.3), sz * R(.8, 1.4), pal, 0);
+    }
+    // ridge-line strokes for a painted silhouette edge
+    const nr = Math.round(TAU * m.R / (sz * 0.5));
+    for (let i = 0; i < nr; i++) {
+      const az = i / nr * TAU; const hm = ridge(L, az); const rd = [Math.cos(az), 0, Math.sin(az)];
+      const dy = (ridge(L, az + 0.003) - hm) / (0.003 * m.R);
+      addP(vadd(vsc(rd, m.R), [0, hm - sz * 0.12, 0]), vnorm([-rd[0], 1, -rd[2]]), vadd([-Math.sin(az), 0, Math.cos(az)], [0, dy, 0]), sz * 0.3, sz * 1.1, L === 2 ? [[0.92, 0.95, 1.0], [0.5, 0.58, 0.8]] : m.pal, 0);
+    }
+  });
+}
+
+function regionAt(x, z) {
+  const r = Math.hypot(x, z);
+  const dr = Math.abs(z - riverZ(x));
+  if (dr < 11) return 'bank';
+  if (Math.abs(r - 60) < 3.2) return 'path';
+  const [rdist] = roadInfo(x, z);
+  if (rdist < 2.8) return 'road';
+  if (inWheat(x, z)) return 'wheatG';
+  if (Math.hypot(x - VILLAGE[0], z - VILLAGE[1]) < 65) return 'village';
+  if ((r > 10 && r < 54) || (r > 66 && r < 112)) return 'field';
+  return (Math.sin(x * 0.013) + Math.cos(z * 0.017)) > 0.4 ? 'meadow2' : 'meadow';
+}
+function genGround() {
+  srand(51);
+  const passes = [[0, 180, 0.85], [180, 400, 2.0], [400, 1000, 4.6]];
+  for (const [r0, r1, sp0] of passes) {
+    const sp = sp0 * SQ, ext = Math.min(r1, 720);
+    for (let gx = -ext; gx < ext; gx += sp) for (let gz = -ext; gz < ext; gz += sp) {
+      const x = gx + R(0, sp), z = gz + R(0, sp), r = Math.hypot(x, z);
+      if (r < r0 || r >= r1 || Math.abs(x) > 720 || Math.abs(z) > 720) continue;
+      const y = H(x, z), n = Hn(x, z);
+      let reg = regionAt(x, z);
+      let tg;
+      if (reg === 'path') tg = [-z, 0, x];
+      else if (reg === 'road') { const [, d] = roadInfo(x, z); tg = [d[0], 0, d[1]]; }
+      else { const a = 1.3 * Math.sin(x * 0.021) + 1.1 * Math.cos(z * 0.017) + R(-.35, .35); tg = [Math.cos(a), 0, Math.sin(a)]; }
+      if (n[1] < 0.78) { reg = 'rock'; tg = vsub(UP, vsc(n, n[1])); }
+      if (reg === 'bank' && Math.abs(z - riverZ(x)) < 7.5 && y < waterLevel(x) + 0.2) continue;
+      const pal = PAL[reg];
+      const nn = vnorm(vadd(n, [R(-.15, .15), 0, R(-.15, .15)]));
+      addP([x, y + 0.04, z], nn, tg, sp * R(.55, .8), sp * R(1.4, 2.1), pal, 0);
+    }
+  }
+  // cliff rock above the waterfall
+  for (let i = 0; i < 52000 * Q; i++) {
+    const x = R(287.5, 300.5), z = R(-360, 40), y = H(x, z), n = Hn(x, z);
+    if (n[1] > 0.97) continue;
+    if (Math.abs(z - riverZ(x)) < 8) continue;
+    const pal = rnd() < .3 ? [[0.42, 0.40, 0.46], [0.10, 0.10, 0.18]] : PAL.rock;
+    addP([x + n[0] * .1, y, z], n, vadd(vsub(UP, vsc(n, n[1])), [0, 0, R(-.4, .4)]), 0.5 * SQ * R(.7, 1.3), 1.4 * SQ * R(.7, 1.4), pal, 0);
+  }
+}
+function genRiver() {
+  srand(61);
+  for (let x = -720; x < 720; ) {
+    const near = Math.abs(x) < 220 ? 0.55 : Math.abs(x) < 420 ? 1.3 : 2.8; const sp = near * SQ;
+    const zc = riverZ(x), dz = 28 * 0.0125 * Math.cos(x * 0.0125) + 10 * 0.031 * Math.cos(x * 0.031 + 1);
+    const fl = vnorm([1, 0, dz]);
+    if (x < 289 || x > 299) for (let q = -9; q < 9; q += sp) {
+      const xx = x + R(-sp, sp) * .5, zz = zc + q + R(-sp, sp) * .5;
+      const edge = Math.abs(q) / 9;
+      const c0 = vlerp([0.12, 0.26, 0.56], [0.25, 0.42, 0.60], rnd() * 0.5 + edge * 0.3);
+      add([xx, waterLevel(xx) + 0.03, zz], UP, vadd(fl, [0, 0, R(-.12, .12)]), sp * R(.35, .5), sp * R(2.4, 3.6), 2, 0, c0, c0, R(0.5, 1.0) * (x > 299 ? 1.4 : 1), 0.03);
+    }
+    x += sp;
+  }
+  // waterfall on the cliff face
+  for (let i = 0; i < 9000 * Q; i++) {
+    const x = R(288.5, 299.5), zc = riverZ(x), z = zc + R(-7, 7);
+    const y = waterLevel(x), sl = (waterLevel(x + 0.2) - waterLevel(x - 0.2)) / 0.4;
+    const dn = vnorm([-1, -sl, 0]), n = vnorm([-sl, 1, 0]);
+    if (Math.abs(sl) < 0.4 && rnd() < 0.6) continue;
+    const c = rnd() < .55 ? [0.82, 0.88, 0.95] : [0.45, 0.62, 0.85];
+    add([x - 0.3, y + 0.15, z], n, dn, R(.25, .4) * SQ, R(1.6, 2.8) * SQ, 6, 0, c, c, R(0.6, 1), 0.04);
+  }
+  // foam at its foot + boulders
+  for (let i = 0; i < 2500 * Q; i++) {
+    const x = R(280, 290), z = riverZ(x) + R(-9, 9);
+    const c = [0.80, 0.86, 0.92];
+    add([x, waterLevel(x) + R(0.05, 0.6), z], vnorm([R(-1, 1), 1, R(-1, 1)]), [R(-1, 1), R(0, .4), R(-1, 1)], R(.2, .35) * SQ, R(.5, .9) * SQ, 2, 0, c, c, 1.0, 0.05);
+  }
+  for (let k = 0; k < 9; k++) { const x = R(276, 288), z = riverZ(x) + (rnd() < .5 ? -1 : 1) * R(6, 11); ellipsoid(0, [x, waterLevel(x), z], [R(1.2, 2.4), R(.8, 1.6), R(1.2, 2.2)], 300 * Q, PAL.rock, 0.3 * SQ, 0.7 * SQ, (p, n) => vcross(n, UP)); }
+}
+function genBridge() {
+  srand(71);
+  const D = BR.D, T = [-D[2], 0, D[0]];
+  const P = (s, t, y) => [BR.c[0] + D[0] * s + T[0] * t, y, BR.c[2] + D[2] * s + T[2] * t];
+  const sp = 0.32 * SQ;
+  for (let s = -BR.half; s < BR.half; s += sp) for (let t = -BR.wid; t < BR.wid; t += sp) {
+    const ss = s + R(0, sp), tt = t + R(0, sp), y = deckY(ss), dy = (deckY(ss + .1) - deckY(ss - .1)) / .2;
+    addP(P(ss, tt, y + 0.03), vnorm([-D[0] * dy, 1, -D[2] * dy]), rnd() < .5 ? D : T, sp * 0.8, sp * 1.6, PAL.stone);
+  }
+  const wl = waterLevel(BR.c[0]);
+  for (const side of [-1, 1]) {
+    const tw = side * (BR.wid + 0.2);
+    // parapet (inner & outer faces + top)
+    for (let i = 0; i < 1100 * Q; i++) {
+      const s = R(-BR.half, BR.half), y = deckY(s) + R(0, 0.8);
+      for (const o of [-0.18, 0.18]) addP(P(s, tw + o, y), vsc(T, Math.sign(o)), rnd() < .6 ? D : UP, 0.18 * SQ, 0.42 * SQ, PAL.stone);
+    }
+    for (let i = 0; i < 300 * Q; i++) { const s = R(-BR.half, BR.half); addP(P(s, tw, deckY(s) + 0.82), UP, D, 0.25 * SQ, 0.5 * SQ, PAL.stone); }
+    // spandrel walls down to the arch
+    for (let i = 0; i < 2600 * Q; i++) {
+      const s = R(-BR.half, BR.half), top = deckY(s);
+      const arch = wl + 4.2 * Math.sqrt(Math.max(0, 1 - (s / 11.5) ** 2));
+      const bot = Math.abs(s) < 11.5 ? arch : Math.min(H(...[P(s, tw, 0)[0], P(s, tw, 0)[2]]), top);
+      if (top - bot < 0.05) continue;
+      addP(P(s, tw + side * 0.2, R(bot, top)), vsc(T, side), rnd() < .6 ? D : UP, 0.2 * SQ, 0.45 * SQ, PAL.stone);
+    }
+    // arch ring voussoirs
+    for (let a = 0; a < Math.PI; a += 0.05) {
+      const s = -Math.cos(a) * 11.5, y = wl + 4.2 * Math.sin(a);
+      addP(P(s, tw + side * 0.25, y), vsc(T, side), [Math.sin(a) * D[0], Math.cos(a), Math.sin(a) * D[2]], 0.22, 0.6, [[0.66, 0.64, 0.58], [0.18, 0.18, 0.26]]);
+    }
+  }
+  for (let i = 0; i < 1200 * Q; i++) { const s = R(-11.4, 11.4), t = R(-BR.wid, BR.wid); const y = wl + 4.2 * Math.sqrt(1 - (s / 11.5) ** 2); addP(P(s, t, y - 0.05), [0, -1, 0], D, 0.25 * SQ, 0.6 * SQ, PAL.stone); }
+}
+function genSunflowers() {
+  srand(81);
+  const F = vnorm([0.9, 0, 0.45]);              // all heads face the same way…
+  const HN = vnorm([F[0] * 0.55, -0.83, F[2] * 0.55]); // …and droop at night
+  const sp = 2.35 * SQ;
+  const [he1, he2] = perp(HN);
+  for (let gx = -114; gx < 114; gx += sp) for (let gz = -114; gz < 114; gz += sp) {
+    const x = gx + R(0, sp * .8), z = gz + R(0, sp * .8), r = Math.hypot(x, z);
+    if (!((r > 10 && r < 54) || (r > 66 && r < 112))) continue;
+    if (roadInfo(x, z)[0] < 4.5 || inWheat(x, z) || Math.abs(z - riverZ(x)) < 22) continue;
+    if (Math.hypot(x - WINDMILL[0], z - WINDMILL[1]) < 15 || Math.hypot(x - COTTAGE[0], z - COTTAGE[1]) < 14 || Math.hypot(x - BIGCYP[0], z - BIGCYP[1]) < 4) continue;
+    const y = H(x, z), hs = R(1.35, 2.05), base = [x, y, z];
+    const top = vadd(base, vadd([0, hs, 0], vsc(F, 0.28)));
+    const sway = 0.12;
+    // stem
+    for (let k = 0; k < 5; k++) { const t = (k + .5) / 5; const p = vadd(vlerp(base, top, t), vsc(F, 0.25 * t * t - 0.25 * t)); const az = R(0, TAU); addP(p, [Math.cos(az), 0, Math.sin(az)], vsub(top, base), 0.07, hs / 5 * 1.5, PAL.stem, 4, 0, sway * t); }
+    // leaves
+    for (let k = 0; k < 3; k++) { const t = R(.3, .75), az = R(0, TAU), out = [Math.cos(az), 0, Math.sin(az)]; const p = vadd(vadd(vlerp(base, top, t), vsc(out, 0.2)), [0, -0.05, 0]); addP(p, vnorm(vadd(UP, vsc(out, .4))), vadd(out, [0, -0.35, 0]), 0.2, 0.42, PAL.stem, 4, 0, sway * t); }
+    // head
+    const hc = vadd(top, vsc(HN, 0.06));
+    for (let k = 0; k < 11; k++) { const a = R(0, TAU), rr = Math.sqrt(rnd()) * 0.19; const p = vadd(hc, vadd(vsc(he1, Math.cos(a) * rr), vsc(he2, Math.sin(a) * rr))); addP(vadd(p, vsc(HN, 0.03)), vnorm(vadd(HN, [0, 1.0, 0])), vadd(vsc(he1, -Math.sin(a)), vsc(he2, Math.cos(a))), 0.11, 0.15, PAL.seed, 4, 0, sway); }
+    const np = 14;
+    for (let k = 0; k < np; k++) { const a = (k + R(0, .4)) / np * TAU; const dir = vadd(vsc(he1, Math.cos(a)), vsc(he2, Math.sin(a))); const p = vadd(hc, vadd(vsc(dir, 0.33), vsc(HN, -0.03))); addP(p, vnorm(vadd(vadd(HN, vsc(dir, 0.7)), [0, 1.1, 0])), vadd(dir, vsc(HN, -0.25)), 0.11, 0.3, PAL.petal, 4, 0, sway); }
+  }
+}
+function genWheat() {
+  srand(91);
+  for (const w of WHEAT) {
+    const c = Math.cos(w.a), s = Math.sin(w.a);
+    const cnt = Math.round(4 * w.hw * w.hd / (0.62 * 0.62) * Q);
+    for (let i = 0; i < cnt; i++) {
+      const lx = R(-w.hw, w.hw), lz = R(-w.hd, w.hd);
+      const x = w.cx + lx * c - lz * s, z = w.cz + lx * s + lz * c;
+      if (Math.abs(z - riverZ(x)) < 14 || roadInfo(x, z)[0] < 3) continue;
+      const y = H(x, z), h = R(0.7, 1.1), az = R(0, TAU);
+      const row = Math.sin(lx * 0.9) * 0.3;
+      addP([x, y + h * 0.5, z], [Math.cos(az), 0.3, Math.sin(az)], [row + R(-.25, .25), 1, R(-.25, .25)], 0.34 * SQ, h * 1.1, PAL.wheat, 4, 0, 0.45);
+    }
+  }
+}
+function cypress(bx, bz, ht, rad, dens) {
+  const y0 = H(bx, bz) - 0.3;
+  const cnt = Math.round(ht * rad * 70 * dens * Q);
+  for (let i = 0; i < cnt; i++) {
+    const t = Math.pow(rnd(), 0.85), ph = R(0, TAU);
+    const prof = rad * Math.pow(Math.sin(Math.PI * Math.min(1, t * 0.55 + 0.45)), 0.9) * (1 - t * 0.75) * (0.85 + 0.25 * Math.sin(t * 19 + ph * 2));
+    const twist = ph + t * 2.2;
+    const dir = [Math.cos(twist), 0, Math.sin(twist)];
+    const p = [bx + dir[0] * prof * R(.75, 1.05), y0 + t * ht, bz + dir[2] * prof * R(.75, 1.05)];
+    const tg = vadd(UP, vsc([-dir[2], 0, dir[0]], 0.7 * Math.sin(t * 10 + ph * 3)));
+    addP(p, vadd(dir, [0, 0.25, 0]), tg, 0.32 * SQ * mix(1.2, .7, t), 1.1 * SQ * mix(1.3, .8, t), rnd() < .7 ? PAL.cypress : PAL.cypress2, 4, 0, 0.12 * t);
+  }
+}
+function roundTree(bx, bz, ht, rad) {
+  const y0 = H(bx, bz);
+  tube(0, [bx, y0 - .2, bz], [bx, y0 + ht * 0.55, bz], 0.28, 0.18, 120 * Q, PAL.trunk, 0.15, 0.5, 0);
+  ellipsoid(0, [bx, y0 + ht * 0.68, bz], [rad, ht * 0.38, rad], 700 * Q * rad / 3, PAL.tree, 0.35 * SQ, 0.9 * SQ, (p, n) => vadd(vcross(n, UP), [0, R(-.5, .5), 0]), 4, 0.1);
+}
+// buildings --------------------------------------------------------------
+const LIGHTS = []; // [x,y,z,intensity]; index 0 reserved for the lantern
+function windows(o, U, V, N, wins, lit, sp) {
+  for (const [s0, t0, ws, hs] of wins) {
+    const o2 = vadd(vadd(o, vsc(U, s0)), vsc(V, t0)), U2 = vsc(vnorm(U), ws), V2 = vsc(vnorm(V), hs);
+    const on = vadd(o2, vsc(N, 0.06));
+    if (lit) face(0, on, U2, V2, N, [GLOW, GLOW2], 0.13, 0.12, 0.2, 'v', 3);
+    else face(0, on, U2, V2, N, [[0.15, 0.20, 0.38], [0.04, 0.05, 0.12]], 0.13, 0.12, 0.2, 'v', 0);
+    // frame
+    const fo = vadd(o2, vsc(N, 0.09));
+    line(0, fo, vadd(fo, U2), 0.15, PAL.frame, 0.07, 0, N); line(0, vadd(fo, V2), vadd(vadd(fo, V2), U2), 0.15, PAL.frame, 0.07, 0, N);
+    line(0, fo, vadd(fo, V2), 0.15, PAL.frame, 0.07, 0, N); line(0, vadd(fo, U2), vadd(vadd(fo, U2), V2), 0.15, PAL.frame, 0.07, 0, N);
+    line(0, vadd(fo, vsc(U2, .5)), vadd(vadd(fo, vsc(U2, .5)), V2), 0.15, PAL.frame, 0.05, 0, N);
+  }
+}
+function house(cx, cz, a, w, d, h, rh, wall, roof, lit, lightI) {
+  const ex = [Math.cos(a), 0, -Math.sin(a)], ez = [Math.sin(a), 0, Math.cos(a)];
+  const hs = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => H(cx + ex[0] * i * w / 2 + ez[0] * j * d / 2, cz + ex[2] * i * w / 2 + ez[2] * j * d / 2));
+  const y0 = Math.min(...hs) - 1.0, yb = Math.max(...hs), top = yb + h;
+  const C = (i, j, y) => [cx + ex[0] * i * w / 2 + ez[0] * j * d / 2, y, cz + ex[2] * i * w / 2 + ez[2] * j * d / 2];
+  const sp = 0.42 * SQ, ws = 0.28 * SQ, ls = 0.75 * SQ;
+  const Hh = top - y0;
+  face(0, C(-1, 1, y0), vsc(ex, w), [0, Hh, 0], ez, wall, sp, ws, ls, 'u');
+  face(0, C(1, -1, y0), vsc(ex, -w), [0, Hh, 0], vsc(ez, -1), wall, sp, ws, ls, 'u');
+  face(0, C(1, 1, y0), vsc(ez, -d), [0, Hh, 0], ex, wall, sp, ws, ls, 'v');
+  face(0, C(-1, -1, y0), vsc(ez, d), [0, Hh, 0], vsc(ex, -1), wall, sp, ws, ls, 'v');
+  // gables (sides ±ex)
+  face(0, C(1, 1, top), vsc(ez, -d), [0, rh, 0], ex, wall, sp, ws, ls, 'v', 0, 0, (s, t) => t < 1 - Math.abs(s * 2 - 1));
+  face(0, C(-1, -1, top), vsc(ez, d), [0, rh, 0], vsc(ex, -1), wall, sp, ws, ls, 'v', 0, 0, (s, t) => t < 1 - Math.abs(s * 2 - 1));
+  // roof slopes (ridge along ex)
+  const ov = 0.4, ridgeY = top + rh;
+  for (const j of [1, -1]) {
+    const eave = vadd(C(-1, j, top - 0.15), vadd(vsc(ex, -ov), vsc(ez, j * ov)));
+    const toR = [-(d / 2 + ov) * ez[0] * j, rh + 0.15, -(d / 2 + ov) * ez[2] * j];
+    const n = vnorm(vadd(vsc(ez, j * (rh + 0.15)), [0, d / 2 + ov, 0]));
+    face(0, eave, vsc(ex, w + 2 * ov), toR, n, roof, sp * 0.95, ws * 1.1, ls * 1.1, 'v');
+  }
+  line(0, [cx - ex[0] * (w / 2 + ov), ridgeY + 0.05, cz - ex[2] * (w / 2 + ov)], [cx + ex[0] * (w / 2 + ov), ridgeY + 0.05, cz + ex[2] * (w / 2 + ov)], 0.3, roof, 0.18, 0, UP);
+  // chimney
+  if (rnd() < 0.7) { const cc = vadd([cx, ridgeY - rh * 0.3, cz], vsc(ex, w * 0.25)); box(0, vadd(cc, [0, 0.6, 0]), 0.35, 0.9, 0.35, ex, UP, ez, PAL.stone, 0.22, 0.18, 0.4, 'u', true); }
+  // windows & door on the long sides
+  const nW = Math.max(1, Math.floor(w / 2.6));
+  for (const j of [1, -1]) {
+    const o = j > 0 ? C(-1, 1, yb) : C(1, -1, yb), U = vsc(ex, j > 0 ? w : -w), N = vsc(ez, j);
+    const wins = []; for (let k = 0; k < nW; k++) wins.push([(k + 0.5) / nW * w - 0.45, 1.3, 0.9, 1.1]);
+    if (j > 0) { const door = [w * 0.5 - 0.5 + (nW % 2 ? 1.2 : 0), 0.05, 1.0, 1.9]; windows(o, U, [0, 1, 0], N, [door], lit && rnd() < .5, sp); }
+    windows(o, U, [0, 1, 0], N, wins, lit && rnd() < 0.85, sp);
+    if (h > 5.5) windows(o, U, [0, 1, 0], N, wins.map(q => [q[0], 3.6, q[2], q[3]]), lit && rnd() < .5, sp);
+  }
+  if (lit && lightI !== undefined) LIGHTS[lightI] = [cx + ez[0] * (d / 2 + 2), yb + 1.8, cz + ez[2] * (d / 2 + 2), 3.2];
+  return { ex, ez, yb, top };
+}
+function genVillage() {
+  srand(101);
+  // church: nave, tower, tall steeple
+  const ca = 0.35, cex = [Math.cos(ca), 0, -Math.sin(ca)], cez = [Math.sin(ca), 0, Math.cos(ca)];
+  const nv = house(CHURCH[0], CHURCH[1], ca, 22, 10, 9, 4.5, PAL.wallW, PAL.roofB, true, 3);
+  const tc = [CHURCH[0] + cex[0] * 13, 0, CHURCH[1] + cex[2] * 13];
+  const ty = nv.yb, th = 17;
+  box(0, [tc[0], ty + th / 2 - 0.8, tc[2]], 2.6, th / 2 + 0.8, 2.6, cex, UP, cez, PAL.wallW, 0.38 * SQ, 0.28 * SQ, 0.75 * SQ, 'v', true);
+  windows([tc[0] - cex[0] * 0.5 + cez[0] * 2.62, ty + 11, tc[2] - cex[2] * 0.5 + cez[2] * 2.62], cex, UP, cez, [[0, 0, 1.0, 2.0]], true);
+  windows([tc[0] + cex[0] * 2.62 - cez[0] * 0.5, ty + 11, tc[2] + cex[2] * 2.62 - cez[2] * 0.5], cez, UP, cex, [[0, 0, 1.0, 2.0]], true);
+  // spire: 4 triangles
+  const sb = ty + th, sh = 16, apex = [tc[0], sb + sh, tc[2]];
+  for (let k = 0; k < 4; k++) {
+    const a0 = k / 4 * TAU + Math.PI / 4, a1 = (k + 1) / 4 * TAU + Math.PI / 4, rr = 2.6 * Math.SQRT2 * 1.05;
+    const p0 = [tc[0] + (cex[0] * Math.cos(a0) + cez[0] * Math.sin(a0)) * rr, sb, tc[2] + (cex[2] * Math.cos(a0) + cez[2] * Math.sin(a0)) * rr];
+    const p1 = [tc[0] + (cex[0] * Math.cos(a1) + cez[0] * Math.sin(a1)) * rr, sb, tc[2] + (cex[2] * Math.cos(a1) + cez[2] * Math.sin(a1)) * rr];
+    let n = vnorm(vcross(vsub(p1, p0), vsub(apex, p0))); if (vdot(n, vsub(p0, tc.map((v, i) => i === 1 ? sb : v))) < 0) n = vsc(n, -1);
+    face(0, p0, vsub(p1, p0), vsub(apex, p0), n, PAL.steeple, 0.3 * SQ, 0.22 * SQ, 0.8 * SQ, 'v', 0, 0, (s, t) => s + t < 1);
+  }
+  line(0, apex, vadd(apex, [0, 2.2, 0]), 0.3, PAL.frame, 0.1); line(0, vadd(apex, [-.5, 1.5, 0]), vadd(apex, [.5, 1.5, 0]), 0.3, PAL.frame, 0.1);
+  // houses
+  const placed = [];
+  let li = 4;
+  for (let tries = 0; tries < 400 && placed.length < 17; tries++) {
+    const a = R(0, TAU), rr = R(10, 68), x = VILLAGE[0] + Math.cos(a) * rr, z = VILLAGE[1] + Math.sin(a) * rr;
+    if (roadInfo(x, z)[0] < 7 || Math.abs(z - riverZ(x)) < 22 || Math.hypot(x - CHURCH[0], z - CHURCH[1]) < 22) continue;
+    if (placed.some(p => Math.hypot(p[0] - x, p[1] - z) < 13)) continue;
+    placed.push([x, z]);
+    const [, rdir] = roadInfo(x, z);
+    const ang = Math.atan2(-rdir[1], rdir[0]) + (rnd() < .3 ? Math.PI / 2 : 0);
+    const big = rnd() < 0.3;
+    house(x, z, ang, R(6, 9.5), R(5, 7), big ? R(5.8, 7) : R(3.8, 5), R(2, 3.4), rnd() < .5 ? PAL.wallW : PAL.wallO, rnd() < .55 ? PAL.roofB : PAL.roofR, rnd() < 0.75, li < 16 ? li++ : undefined);
+  }
+  // trees around the village and along the river
+  for (let k = 0; k < 16; k++) { const a = R(0, TAU), rr = R(20, 85), x = VILLAGE[0] + Math.cos(a) * rr, z = VILLAGE[1] + Math.sin(a) * rr; if (roadInfo(x, z)[0] < 5 || placed.some(p => Math.hypot(p[0] - x, p[1] - z) < 8) || Math.abs(z - riverZ(x)) < 14) continue; roundTree(x, z, R(6, 9), R(2.4, 3.6)); }
+  for (let k = 0; k < 14; k++) { const x = R(-260, 260), z = riverZ(x) + (rnd() < .5 ? 1 : -1) * R(15, 26); if (Math.abs(x + 15) < 25) continue; roundTree(x, z, R(5, 8), R(2, 3.2)); }
+}
+function genWindmillCottage(blades) {
+  srand(111);
+  const [wx, wz] = WINDMILL, y0 = H(wx, wz) - 0.5;
+  const Aw = vnorm([-wx, 0, -wz + 10]);
+  for (let i = 0; i < 2600 * Q; i++) {
+    const t = rnd(), ph = R(0, TAU), rr = mix(3.7, 2.35, t);
+    const dir = [Math.cos(ph), 0, Math.sin(ph)];
+    addP([wx + dir[0] * rr, y0 + t * 11.6, wz + dir[2] * rr], vadd(dir, [0, 0.12, 0]), vadd(UP, vsc([-dir[2], 0, dir[0]], R(-.3, .3))), 0.3 * SQ, 0.85 * SQ, PAL.plaster);
+  }
+  for (let i = 0; i < 700 * Q; i++) { const t = Math.sqrt(rnd()), ph = R(0, TAU), rr = 2.9 * t; const dir = [Math.cos(ph), 0, Math.sin(ph)]; addP([wx + dir[0] * rr, y0 + 11.6 + (1 - t) * 3.6, wz + dir[2] * rr], vadd(dir, [0, 0.9, 0]), vsub([0, 1, 0], vsc(dir, .8)), 0.3 * SQ, 0.8 * SQ, PAL.roofR); }
+  // lit door + window facing the blades
+  const pt = (ang, y, r) => [wx + Math.cos(ang) * r, y, wz + Math.sin(ang) * r];
+  const fa = Math.atan2(Aw[2], Aw[0]);
+  const nrm = [Math.cos(fa), 0, Math.sin(fa)], side = [-Math.sin(fa), 0, Math.cos(fa)];
+  windows(vadd(pt(fa, y0 + 0.5, 3.72), vsc(side, -0.6)), side, UP, nrm, [[0, 0, 1.2, 2.0]], true);
+  windows(vadd(pt(fa, y0 + 6.5, 2.95), vsc(side, -0.4)), side, UP, nrm, [[0, 0, 0.8, 1.0]], true);
+  LIGHTS[2] = [...vadd(pt(fa, y0 + 1.8, 5.5), [0, 0, 0]), 3.0];
+  // blades: group 14 (local plane xy, axis z)
+  const g = 14;
+  ellipsoid(g, [0, 0, 0.2], [0.5, 0.5, 0.5], 80, PAL.wood, 0.15, 0.3, null);
+  for (let b = 0; b < 4; b++) {
+    const be = b / 4 * TAU, rd = [Math.cos(be), Math.sin(be), 0], pd = [-Math.sin(be), Math.cos(be), 0];
+    line(g, vsc(rd, 0.3), vsc(rd, 10.6), 0.35, PAL.wood, 0.22, 0, [0, 0, 1]);
+    face(g, vadd(vsc(rd, 1.6), vadd(vsc(pd, 0.15), [0, 0, -0.08])), vsc(rd, 8.8), vsc(pd, 1.95), [0, 0, 1], PAL.cloth, 0.17 * SQ, 0.24 * SQ, 0.65 * SQ, 'u');
+    for (const q of [0.15, 1.1, 2.1]) line(g, vadd(vadd(vsc(rd, 1.6), vsc(pd, q)), [0, 0, .06]), vadd(vadd(vsc(rd, 10.4), vsc(pd, q)), [0, 0, .06]), 0.4, PAL.wood, 0.07, 0, [0, 0, 1]);
+    for (let r = 1.6; r < 10.6; r += 1.1) line(g, vadd(vadd(vsc(rd, r), vsc(pd, 0.15)), [0, 0, .06]), vadd(vadd(vsc(rd, r), vsc(pd, 2.1)), [0, 0, .06]), 0.3, PAL.wood, 0.06, 0, [0, 0, 1]);
+  }
+  const hub = vadd([wx, y0 + 11.6, wz], vsc(Aw, 3.4));
+  const bx = vnorm(vcross(UP, Aw)), by = vcross(Aw, bx);
+  blades.base = mBasis(bx, by, Aw, hub);
+  line(0, [wx, y0 + 11.6, wz], hub, 0.3, PAL.wood, 0.3, 0, UP);
+  // cottage with lit windows
+  house(COTTAGE[0], COTTAGE[1], 0.5, 9, 6, 4.2, 2.6, PAL.wallO, PAL.roofR, true, 1);
+  // a stone wall and woodpile near the cottage
+  for (let k = 0; k < 6; k++) { const x = COTTAGE[0] - 9 + k * 1.6, z = COTTAGE[1] + 6; ellipsoid(0, [x, H(x, z) + 0.3, z], [0.7, 0.35, 0.4], 50 * Q + 20, PAL.stone, 0.18, 0.35, null); }
+}
+function genObstacles() {
+  srand(121);
+  for (const o of OBST) {
+    const ex = o.rd, ez = [-o.rd[2], 0, o.rd[0]], y = o.c[1];
+    if (o.type === 'fence') {
+      for (const q of [-3.3, -1.1, 1.1, 3.3]) { const b = vadd(o.c, vsc(ex, q)); tube(0, vadd(b, [0, -0.3, 0]), vadd(b, [0, 1.15, 0]), 0.11, 0.09, 90, PAL.fence, 0.08, 0.3, 0); }
+      for (const hh of [0.45, 0.88]) box(0, vadd(o.c, [0, hh, 0]), 3.6, 0.07, 0.06, ex, UP, ez, PAL.fence, 0.11, 0.09, 0.4, 'u', false);
+    } else if (o.type === 'wall') {
+      for (let i = 0; i < 26; i++) { const q = R(-3.4, 3.4), hh = R(0.15, 0.75); ellipsoid(0, vadd(vadd(o.c, vsc(ex, q)), [0, hh, 0]), [R(.3, .5), R(.18, .28), R(.22, .3)], 45, rnd() < .5 ? PAL.stone : PAL.rock, 0.14, 0.3, (p, n) => vcross(n, UP)); }
+      box(0, vadd(o.c, [0, 0.42, 0]), 3.5, 0.42, 0.22, ex, UP, ez, PAL.stone, 0.15, 0.13, 0.32, 'u', true);
+    } else {
+      const a = vadd(vadd(o.c, vsc(ex, -3.6)), [0, 0.42, 0]), b = vadd(vadd(o.c, vsc(ex, 3.6)), [0, 0.38, 0]);
+      tube(0, a, b, 0.42, 0.36, 900, PAL.bark, 0.1, 0.45, 0, 0, true);
+      for (const [p, r] of [[a, .42], [b, .36]]) for (let k = 0; k < 40; k++) { const t = Math.sqrt(rnd()) * r, ph = R(0, TAU); const off = vadd(vsc(ez, Math.cos(ph) * t), [0, Math.sin(ph) * t, 0]); addP(vadd(p, off), vsc(ex, p === a ? -1 : 1), vadd(vsc(ez, -Math.sin(ph)), [0, Math.cos(ph), 0]), 0.07, 0.14, [[0.72, 0.58, 0.40], [0.2, 0.15, 0.15]]); }
+      line(0, vadd(o.c, [0, 0.8, 0]), vadd(vadd(o.c, vsc(ex, 1.2)), [0, 1.4, 0]), 0.2, PAL.bark, 0.08, 0, ez);
+    }
+  }
+}
+// horse & rider (groups 1..13, 15) -------------------------------------
+const HQ = Math.max(Q, 0.55), HS = 1 / Math.sqrt(HQ);
+const PIV = { body: [0, 1.45, 0], neck: [0, 1.72, 0.78], tail: [0, 1.62, -1.02], legs: [[0.2, 1.18, 0.70], [-0.2, 1.18, 0.70], [0.2, 1.22, -0.72], [-0.2, 1.22, -0.72]], rider: [0, 1.92, -0.05], cloak: [0, 0.70, -0.02], arm: [0.21, 0.62, 0] };
+const LANTERN_LOCAL = [0.30, -0.62, 0.38];
+function genHorseRider() {
+  srand(131);
+  const back = (p, n) => vadd([0, -0.2, -1], [R(-.1, .1), R(-.1, .1), 0]);
+  // body (1)
+  ellipsoid(1, [0, 0, 0], [0.40, 0.46, 1.0], 2600 * HQ, PAL.horse, 0.09 * HS, 0.22 * HS, back);
+  ellipsoid(1, [0, -0.02, 0.78], [0.36, 0.42, 0.36], 650 * HQ, PAL.horse, 0.09 * HS, 0.2 * HS, back);
+  ellipsoid(1, [0, 0.06, -0.72], [0.42, 0.46, 0.40], 800 * HQ, PAL.horse, 0.09 * HS, 0.2 * HS, back);
+  ellipsoid(1, [0, 0.40, -0.02], [0.35, 0.15, 0.42], 700 * HQ, PAL.saddle, 0.08 * HS, 0.17 * HS, (p, n) => [0, 0, 1], 0, 0, null, p => p[1] > -0.02);
+  ellipsoid(1, [0, 0.35, -0.02], [0.44, 0.12, 0.52], 500 * HQ, PAL.blanket, 0.08 * HS, 0.17 * HS, (p, n) => [0, -1, 0], 0, 0, null, p => p[1] < 0.03 && p[1] > -0.11);
+  for (const sx of [1, -1]) { line(1, [0.43 * sx, 0.28, 0.02], [0.47 * sx, -0.34, 0.06], 0.08, PAL.saddle, 0.05, 0, [sx, 0, 0]); ellipsoid(1, [0.48 * sx, -0.38, 0.06], [0.06, 0.04, 0.08], 25, PAL.metal, 0.04, 0.07, null); }
+  // neck & head (2)
+  tube(2, [0, 0, 0], [0, 0.55, 0.42], 0.27, 0.17, 1000 * HQ, PAL.horse, 0.09 * HS, 0.2 * HS, 0);
+  const hr = mRx(0.9);
+  ellipsoid(2, [0, 0.58, 0.74], [0.14, 0.17, 0.36], 800 * HQ, PAL.horse, 0.08 * HS, 0.17 * HS, (p, n) => [0, 0, 1], 0, 0, hr);
+  ellipsoid(2, [0, 0.36, 0.95], [0.11, 0.11, 0.12], 160 * HQ, PAL.mane, 0.06, 0.1, null);
+  for (const sx of [1, -1]) { addP([0.07 * sx, 0.84, 0.62], [sx, 0, 0.3], UP, 0.06, 0.16, PAL.horse, 0, 2); addP([0.13 * sx, 0.68, 0.78], [sx, 0, 0], [0, 0, 1], 0.04, 0.05, PAL.hoof, 0, 2); }
+  for (let i = 0; i < 220 * HQ; i++) { const t = rnd(); const p = vadd(vlerp([0, 0.12, -0.12], [0, 0.78, 0.48], t), [R(-.05, .05), 0.17 - t * 0.05, R(-.04, .04)]); addP(p, [rnd() < .5 ? 1 : -1, 0.3, 0], [R(-.4, .4), -0.8, -0.45], 0.07, 0.3, PAL.mane, 4, 2, 0.25); }
+  for (const sx of [1, -1]) { line(2, [0.1 * sx, 0.34, 0.92], [0.12 * sx, 0.5, -0.42], 0.08, PAL.saddle, 0.035, 0, [sx, 0, 0]); line(2, [0.13 * sx, 0.55, 0.6], [0.11 * sx, 0.36, 0.92], 0.08, PAL.saddle, 0.035, 0, [sx, 0, 0]); }
+  // tail (3)
+  for (let i = 0; i < 260 * HQ; i++) { const t = rnd(); const sp = 0.05 * (1 + t * 2.4); addP([R(-sp, sp), -0.85 * t, -0.3 * t - 0.06 * t * t + R(-sp, sp) * .5], [rnd() < .5 ? 1 : -1, 0, -0.3], [0, -0.94, -0.33], 0.06, 0.34, PAL.mane, 4, 3, 0.2); }
+  // legs (4..7 upper, 8..11 lower)
+  for (let k = 0; k < 4; k++) {
+    const hind = k >= 2;
+    tube(4 + k, [0, 0.08, 0], [0, -0.58, 0], hind ? 0.2 : 0.15, 0.09, (hind ? 520 : 400) * HQ, PAL.horse, 0.07 * HS, 0.18 * HS, 0);
+    tube(8 + k, [0, 0, 0], [0, -0.5, 0], 0.075, 0.062, 240 * HQ, PAL.horse, 0.05 * HS, 0.13 * HS, 0);
+    tube(8 + k, [0, -0.42, 0], [0, -0.52, 0], 0.08, 0.075, 50, PAL.mane, 0.05, 0.08, 0);
+    tube(8 + k, [0, -0.5, 0], [0, -0.6, 0.02], 0.08, 0.09, 70, PAL.hoof, 0.05, 0.08, 0);
+  }
+  // rider (12)
+  ellipsoid(12, [0, 0.42, 0], [0.21, 0.31, 0.15], 600 * HQ, PAL.cloak, 0.07 * HS, 0.17 * HS, (p, n) => UP);
+  ellipsoid(12, [0, 0.88, 0.03], [0.11, 0.12, 0.11], 260 * HQ, PAL.skin, 0.05, 0.08, null);
+  for (let i = 0; i < 520 * HQ; i++) { const rr = R(0.1, 0.47), a = R(0, TAU); addP([Math.cos(a) * rr, 0.99 + (rr - .1) * 0.04, Math.sin(a) * rr + 0.02], UP, [-Math.sin(a), 0, Math.cos(a)], 0.08, 0.16, PAL.hat, 0, 12); }
+  tube(12, [0, 0.99, 0.02], [0, 1.2, 0.02], 0.16, 0.14, 200 * HQ, PAL.hat, 0.06, 0.12, 0, 0, false);
+  ellipsoid(12, [0, 1.2, 0.02], [0.14, 0.03, 0.14], 50, PAL.hat, 0.06, 0.1, null);
+  for (const sx of [1, -1]) {
+    tube(12, [0.14 * sx, 0.02, 0.06], [0.36 * sx, -0.22, 0.30], 0.095, 0.085, 170 * HQ, PAL.trousers, 0.06, 0.14, 0);
+    tube(12, [0.36 * sx, -0.22, 0.30], [0.40 * sx, -0.62, 0.18], 0.075, 0.065, 140 * HQ, PAL.trousers, 0.06, 0.14, 0);
+    tube(12, [0.40 * sx, -0.56, 0.18], [0.41 * sx, -0.72, 0.28], 0.07, 0.07, 80, PAL.hoof, 0.05, 0.1, 0);
+  }
+  tube(12, [-0.21, 0.62, 0], [-0.27, 0.36, 0.18], 0.07, 0.065, 140 * HQ, PAL.cloak, 0.06, 0.14, 0);
+  tube(12, [-0.27, 0.36, 0.18], [-0.12, 0.30, 0.42], 0.06, 0.05, 120 * HQ, PAL.cloak, 0.06, 0.12, 0);
+  ellipsoid(12, [-0.12, 0.30, 0.45], [0.05, 0.05, 0.05], 30, PAL.skin, 0.04, 0.06, null);
+  ellipsoid(12, [0, 0.69, 0.02], [0.2, 0.07, 0.15], 160, PAL.cloak, 0.06, 0.12, (p, n) => [1, 0, 0]);
+  // cloak (15)
+  for (let i = 0; i < 2000 * HQ; i++) {
+    const t = rnd(), ph = R(-2.5, 2.5), rr = 0.22 + 0.42 * t;
+    const p = [Math.sin(ph) * rr * 1.05, -0.98 * t, -Math.cos(ph) * rr * 0.85 - 0.12 * t];
+    addP(p, [Math.sin(ph), 0.3, -Math.cos(ph)], [R(-.12, .12), -1, -0.2], 0.08 * HS, 0.24 * HS, PAL.cloak, 4, 15, 0.08 * t);
+  }
+  // lantern arm (13)
+  tube(13, [0, 0, 0], [0.14, -0.26, 0.14], 0.07, 0.065, 140 * HQ, PAL.cloak, 0.06, 0.14, 0);
+  tube(13, [0.14, -0.26, 0.14], [0.30, -0.34, 0.36], 0.06, 0.05, 120 * HQ, PAL.cloak, 0.06, 0.12, 0);
+  ellipsoid(13, [0.30, -0.36, 0.38], [0.05, 0.05, 0.05], 30, PAL.skin, 0.04, 0.06, null);
+  line(13, [0.30, -0.38, 0.38], [0.30, -0.48, 0.38], 0.03, PAL.metal, 0.02);
+  const Lc = LANTERN_LOCAL;
+  ellipsoid(13, Lc, [0.07, 0.11, 0.07], 220, [GLOW, GLOW2], 0.04, 0.07, (p, n) => UP, 3);
+  box(13, Lc, 0.085, 0.125, 0.085, [1, 0, 0], UP, [0, 0, 1], PAL.metal, 0.06, 0.015, 0.06, 'v', false);
+  ellipsoid(13, vadd(Lc, [0, 0.15, 0]), [0.09, 0.05, 0.09], 60, PAL.metal, 0.04, 0.07, null);
+}
+
+// ======================================================================
+//  Underpaint meshes (terrain ground coat, river, mountain silhouettes)
+// ======================================================================
+function genUnder() {
+  const pos = [], col = [], nrm = [], idx = [];
+  const push = (p, c, n) => { pos.push(...p); col.push(...c); nrm.push(...n); return pos.length / 3 - 1; };
+  // terrain
+  const st = 6, E = 726, nG = Math.round(2 * E / st) + 1;
+  const base = pos.length / 3;
+  for (let j = 0; j < nG; j++) for (let i = 0; i < nG; i++) {
+    const x = -E + i * st, z = -E + j * st; const reg = regionAt(x, z); const p = PAL[Hn(x, z)[1] < .78 ? 'rock' : reg];
+    push([x, H(x, z) - 0.3, z], vlerp(p[1], p[0], 0.32), Hn(x, z));
+  }
+  for (let j = 0; j < nG - 1; j++) for (let i = 0; i < nG - 1; i++) { const a = base + j * nG + i; idx.push(a, a + nG, a + 1, a + 1, a + nG, a + nG + 1); }
+  // river surface underpaint
+  const rb = pos.length / 3; let nr = 0;
+  for (let x = -726; x <= 726; x += 4) { const z = riverZ(x), y = waterLevel(x); push([x, y - 0.05, z - 9.5], [0.09, 0.19, 0.44], UP); push([x, y - 0.05, z + 9.5], [0.09, 0.19, 0.44], UP); nr++; }
+  for (let k = 0; k < nr - 1; k++) { const a = rb + k * 2; idx.push(a, a + 1, a + 2, a + 2, a + 1, a + 3); }
+  // mountain silhouettes
+  MTN.forEach((m, L) => {
+    const mb = pos.length / 3, n = 900;
+    for (let k = 0; k <= n; k++) { const az = k / n * TAU, rd = [Math.cos(az), 0, Math.sin(az)], hm = ridge(L, az); const nn = vnorm([-rd[0], 0.6, -rd[2]]); push([rd[0] * m.R, hm - m.R * 0.004, rd[2] * m.R], m.under, nn); push([rd[0] * m.R, -80, rd[2] * m.R], m.under, nn); }
+    for (let k = 0; k < n; k++) { const a = mb + k * 2; idx.push(a, a + 1, a + 2, a + 2, a + 1, a + 3); }
+  });
+  return { pos: new Float32Array(pos), col: new Float32Array(col), nrm: new Float32Array(nrm), idx: new Uint32Array(idx) };
+}
+
+// ======================================================================
+//  WebGL2
+// ======================================================================
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, preserveDrawingBuffer: TEST, powerPreference: 'high-performance' });
+if (!gl) { document.getElementById('ltext').textContent = 'WebGL2 is not available in this browser.'; throw new Error('no webgl2'); }
+
+const COMMON = `#version 300 es
+precision highp float; precision highp int;
+uniform mat4 u_vp; uniform vec3 u_cam; uniform float u_time;
+uniform float u_focal, u_target, u_minPx, u_maxPx;
+uniform vec3 u_moonDir; uniform vec4 u_lights[16]; uniform mat4 u_bones[15];
+float hash(float n){ return fract(sin(n)*43758.5453123); }
+float lampAt(vec3 P, vec3 N){
+  float s=0.0;
+  for(int i=0;i<16;i++){ vec4 L=u_lights[i]; if(L.w<=0.0) continue; vec3 dv=L.xyz-P; float d2=dot(dv,dv);
+    float nd=dot(N,dv*inversesqrt(d2+1e-4))*0.5+0.6; s+=L.w*max(nd,0.0)/(1.0+d2*0.12); }
+  return s;
+}
+vec3 paintLit(vec3 P, vec3 N, vec3 hi, vec3 lo, float j, out float lit){
+  float m = clamp(dot(N,u_moonDir)*0.5+0.5, 0.0, 1.0);
+  vec3 col = mix(lo, hi, smoothstep(0.32, 0.78, m + j*0.25));       // pick paint by received light
+  float lum = dot(col, vec3(0.3,0.55,0.15));
+  col = mix(col, lum*vec3(0.74,0.88,1.28), 0.36);                     // moonlight: bluish & desaturated
+  float w = lampAt(P,N);
+  vec3 warm = mix(vec3(1.0,0.66,0.26), hi*vec3(1.45,1.05,0.5)+vec3(0.18,0.08,0.0), 0.45);
+  col = mix(col, warm, clamp(w,0.0,0.92));                            // only lamp-lit areas turn warm
+  lit = max(m, w);
+  return col;
+}
+vec3 haze(vec3 c, float d, float amt){ return mix(c, vec3(0.15,0.24,0.46), smoothstep(250.0,2100.0,d)*amt); }
+`;
+const STROKE_EMIT = `
+out vec2 v_uv; flat out vec3 v_col; flat out float v_seed; flat out float v_lit;
+void emitStroke(vec2 corner, vec3 P, vec3 N, vec3 T, float w, float l, float rank, float kind, vec3 c0, vec3 c1, float aux, float seed, float ext){
+  v_uv = corner; v_seed = seed; v_lit = 0.5; v_col = vec3(0.0);
+  vec4 cc = u_vp*vec4(P,1.0);
+  if(cc.w < 0.05 || abs(cc.x) > cc.w*1.35+2.0 || abs(cc.y) > cc.w*1.35+2.0){ gl_Position=vec4(0.0,0.0,-2.0,1.0); return; }
+  float d = length(P-u_cam);
+  float shrink = ext;
+  if(kind==1.0 || kind==2.0 || kind==6.0){                             // paint flowing along currents
+    float spd = aux*(kind==1.0 ? 0.035 : kind==2.0 ? 0.45 : 1.1);
+    float ph = fract(u_time*spd + seed*7.31);
+    P += T*(ph-0.5)*l*(kind==1.0 ? 3.0 : 2.0);
+    shrink *= smoothstep(0.0,0.16,ph)*smoothstep(1.0,0.84,ph);
+  } else if(kind==4.0){
+    P.x += sin(u_time*1.7 + P.x*0.15 + P.z*0.11)*0.25*aux;
+    P.z += cos(u_time*1.3 + P.x*0.12 - P.z*0.13)*0.18*aux;
+  } else if(kind==5.0){ shrink *= 0.92 + 0.12*sin(u_time*2.3 + seed*40.0); }
+  // ---- level of detail driven by on-screen size ----
+  float proj = sqrt(w*l)*u_focal/d;
+  float k = clamp(proj/u_target, 0.0, 1.0); k *= k;                   // fraction of strokes kept
+  float thr = k*1.25;
+  float keep = 1.0 - smoothstep(thr-0.2, thr, rank);                  // the rest shrink away smoothly
+  float s = min(inversesqrt(max(k,1e-4)), 5.0)*keep*shrink;           // survivors grow larger
+  float px = proj*s;
+  if(px > u_maxPx) s *= u_maxPx/px;                                   // upper size limit
+  s *= smoothstep(u_minPx*0.5, u_minPx, px);                          // lower size limit: shrink & vanish
+  if(s < 0.02){ gl_Position=vec4(0.0,0.0,-2.0,1.0); return; }
+  vec3 B = normalize(cross(N,T)); vec3 Tn = cross(B,N);
+  vec3 Wp = P + Tn*corner.x*l*0.5*s + B*corner.y*w*0.5*s;
+  vec4 clip = u_vp*vec4(Wp,1.0);
+  // front-to-back layer spacing that grows with distance -> stable ordering, no flicker
+  float bias = (1.0-rank)*(0.0016*d + 0.012);
+  vec4 cb = u_vp*vec4(Wp + normalize(u_cam-Wp)*bias, 1.0);
+  clip.z = cb.z/cb.w*clip.w;
+  gl_Position = clip;
+  float j = hash(seed*3.7)-0.5, j2 = hash(seed*9.1)-0.5, j3 = hash(seed*1.9)-0.5;
+  vec3 col; float lit = 1.0;
+  if(kind==0.0 || kind==4.0){ col = paintLit(P,N,c0,c1,j,lit); col = haze(col,d,0.55); }
+  else if(kind==2.0){
+    vec3 V = normalize(P-u_cam); vec3 Rr = reflect(V, vec3(0,1,0)); Rr = normalize(Rr + vec3(j*0.09,0.0,j2*0.09));
+    float e = clamp(Rr.y,0.0,1.0);
+    vec3 sk = mix(vec3(0.16,0.40,0.52), vec3(0.05,0.17,0.52), sqrt(e));
+    float mg = max(dot(Rr,u_moonDir),0.0);
+    sk += vec3(1.0,0.72,0.2)*(pow(mg,90.0)*1.5 + pow(mg,10.0)*0.22);
+    float wr = 0.0;
+    for(int i=0;i<16;i++){ vec4 L=u_lights[i]; if(L.w<=0.0) continue; vec3 dl=L.xyz-P; float dd=length(dl); float g=max(dot(Rr,dl/dd),0.0); wr += L.w*pow(g,70.0)*min(40.0/dd,1.6); }
+    col = mix(c0, sk, 0.55) + vec3(1.0,0.66,0.26)*min(wr,1.2);
+    col = mix(col, c1, step(0.5, aux)*0.0); lit = 0.7 + wr; col = haze(col,d,0.4);
+  }
+  else if(kind==3.0){ col = c0*(0.92 + 0.12*sin(u_time*6.0 + seed*31.0)); lit = 1.0; col = haze(col,d,0.25); }
+  else if(kind==6.0){ float m = clamp(dot(N,u_moonDir)*0.5+0.6,0.0,1.0); col = c0*(0.75+0.3*m); lit = 0.9; col = haze(col,d,0.4); }
+  else { col = c0; lit = 1.0; }
+  col += vec3(j,j2,j3)*0.06;      // small random colour variation per stroke
+  col *= 1.0 + j*0.1;
+  v_col = col; v_lit = lit;
+}
+`;
+const VS_STROKE = COMMON + STROKE_EMIT + `
+layout(location=0) in vec2 a_corner; layout(location=1) in vec3 a_pos; layout(location=2) in vec3 a_wlr;
+layout(location=3) in vec4 a_nk; layout(location=4) in vec4 a_tg; layout(location=5) in vec4 a_c0; layout(location=6) in vec4 a_c1;
+void main(){
+  vec3 P=a_pos, N=a_nk.xyz/127.0, T=a_tg.xyz/127.0;
+  int g = int(a_tg.w+0.5);
+  if(g>0){ mat4 M=u_bones[g-1]; P=(M*vec4(P,1.0)).xyz; N=mat3(M)*N; T=mat3(M)*T; }
+  float seed = a_wlr.z*0.73 + fract(float(gl_InstanceID)*0.6180339);
+  emitStroke(a_corner,P,N,T,a_wlr.x,a_wlr.y,a_wlr.z,a_nk.w,a_c0.rgb,a_c1.rgb,a_c0.a,seed,1.0);
+}`;
+const VS_GRASS = COMMON + GLSL_WORLD + STROKE_EMIT + `
+layout(location=0) in vec2 a_corner;
+uniform vec2 u_gOrigin; uniform float u_gSpacing; uniform int u_gN;
+void main(){
+  int ix = gl_InstanceID % u_gN, iz = gl_InstanceID / u_gN;
+  vec2 cell = u_gOrigin + vec2(float(ix), float(iz));
+  float sd = fract(cell.x*0.1031 + cell.y*0.11369)*97.0 + cell.x*0.013;
+  float h1=hash(sd), h2=hash(sd+1.7), h3=hash(sd+3.1), h4=hash(sd+5.3);
+  vec2 xz = (cell + vec2(h1,h2))*u_gSpacing;
+  float dist = length(xz-u_cam.xz);
+  float Rg = float(u_gN)*0.5*u_gSpacing*0.9;
+  float fade = smoothstep(Rg, Rg*0.7, dist);
+  float r = length(xz);
+  if(fade<=0.0 || abs(r-60.0)<3.4 || roadDist(xz)<3.0 || abs(xz.y-riverZ(xz.x))<10.5 || inWheat(xz.x,xz.y) || xz.x>286.0&&xz.x<302.0){ gl_Position=vec4(0.0,0.0,-2.0,1.0); v_uv=vec2(0.0); v_col=vec3(0.0); v_seed=0.0; v_lit=0.0; return; }
+  vec3 P = vec3(xz.x, terrainH(xz.x,xz.y), xz.y);
+  float hgt = 0.2 + h3*0.36;
+  vec3 T = normalize(vec3((h4-0.5)*0.7, 1.0, (h1-0.5)*0.7));
+  float az = h2*6.2831; vec3 N = normalize(vec3(cos(az),0.35,sin(az)));
+  P += T*hgt*0.5;
+  vec3 c0 = mix(vec3(0.30,0.46,0.40), vec3(0.44,0.52,0.30), h3);
+  vec3 c1 = vec3(0.05,0.11,0.16) + 0.04*h4;
+  emitStroke(a_corner,P,N,T,0.06+0.035*h4,hgt,h1*0.999,4.0,c0,c1,0.35,h4*3.0+h2,fade);
+}`;
+const FS_STROKE = `#version 300 es
+precision highp float;
+in vec2 v_uv; flat in vec3 v_col; flat in float v_seed; flat in float v_lit;
+out vec4 o;
+float h1(float n){ return fract(sin(n)*43758.5453); }
+void main(){
+  const float NB = 8.0;                                   // fixed bristle count per stroke
+  float u = v_uv.x, v = v_uv.y;
+  float vb = (v*0.5+0.5)*NB; float bi = min(floor(vb), NB-1.0); float bf = vb-bi;
+  float r1 = h1(v_seed*17.13+bi*3.71), r2 = h1(v_seed*5.37+bi*11.3), r3 = h1(v_seed*9.91+bi*1.77);
+  float taper = mix(1.0, 0.6, smoothstep(-0.2,1.0,u));
+  float env = 1.0 - smoothstep(0.80, 1.0, abs(v)/taper);
+  float u0 = -0.96 + r1*0.3, u1 = 0.97 - r2*0.5;
+  float along = smoothstep(u0, u0+0.14, u)*(1.0-smoothstep(u1-0.14, u1, u));
+  float prof = 1.0 - abs(bf*2.0-1.0);                       // ridge of each bristle
+  float dry = smoothstep(0.05,1.0,u)*(0.3+0.55*r3);         // dry-brush gaps toward the tail
+  float br = smoothstep(dry-0.12, dry+0.12, prof+0.22);
+  float a = env*along*br;
+  if(a < 0.05) discard;
+  // impasto: bristle ridges + paint load at the start of the stroke
+  float hgt = prof*0.55 + 0.45*(1.0-smoothstep(-1.0,-0.2,u)) + 0.08*sin(u*17.0 + r1*6.28);
+  float ppu = 1.0/max(length(fwidth(v_uv)), 1e-4);
+  vec3 n = normalize(vec3(-dFdx(hgt)*ppu*0.16, -dFdy(hgt)*ppu*0.16, 1.0));
+  vec3 L = normalize(vec3(-0.45,0.55,0.70));
+  float dif = dot(n,L);
+  float spec = pow(max(dot(reflect(-L,n), vec3(0.0,0.0,1.0)),0.0), 16.0);
+  vec3 col = v_col*(0.80 + 0.32*dif) + spec*(0.05+0.13*clamp(v_lit,0.0,1.0));
+  col *= 0.92 + 0.16*r2;
+  col += (r1-0.5)*0.035;
+  o = vec4(col, clamp(a*1.4,0.0,1.0));
+}`;
+const VS_UNDER = COMMON + `
+layout(location=0) in vec3 a_pos; layout(location=1) in vec3 a_col; layout(location=2) in vec3 a_nrm;
+out vec3 v_c;
+void main(){ float lit; vec3 c = paintLit(a_pos, a_nrm, a_col*1.5, a_col*0.7, 0.0, lit); v_c = haze(c, length(a_pos-u_cam), 0.5); gl_Position = u_vp*vec4(a_pos,1.0); }`;
+const FS_UNDER = `#version 300 es
+precision highp float; in vec3 v_c; out vec4 o; void main(){ o = vec4(v_c,1.0); }`;
+
+function compile(vs, fs) {
+  const p = gl.createProgram();
+  for (const [t, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+    const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { const e = gl.getShaderInfoLog(s); console.error(e, src.split('\n').map((l, i) => (i + 1) + ': ' + l).join('\n')); throw new Error('shader: ' + e); }
+    gl.attachShader(p, s);
+  }
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('link: ' + gl.getProgramInfoLog(p));
+  const U = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i); const nm = info.name.replace('[0]', ''); U[nm] = gl.getUniformLocation(p, info.name); }
+  return { p, U };
+}
+
+// ======================================================================
+//  Physics: Rapier when available, otherwise a small built-in solver
+// ======================================================================
+const BALL = 0.5;
+const phys = { engine: 'built-in', pos: [60, 0, 0], vel: [0, 0, 0], grounded: true, world: null, body: null, RAP: null };
+async function loadRapier() {
+  if (QS.has('nophys')) return null;
+  for (const url of RAPIER_URLS) {
+    try {
+      const m = await Promise.race([import(url), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))]);
+      const RA = m.default && m.default.World ? m.default : m;
+      await RA.init();
+      return RA;
+    } catch (e) { console.warn('Rapier load failed from', url, e.message); }
+  }
+  return null;
+}
+function setupPhysics(RA) {
+  phys.pos = [60, H(60, 0) + BALL + 0.05, 0];
+  if (!RA) return;
+  try {
+    const world = new RA.World({ x: 0, y: -9.81, z: 0 });
+    const st = 4, E = 460, n = Math.round(2 * E / st) + 1;
+    const vtx = new Float32Array(n * n * 3), ind = new Uint32Array((n - 1) * (n - 1) * 6);
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const x = -E + i * st, z = -E + j * st, k = (j * n + i) * 3; vtx[k] = x; vtx[k + 1] = H(x, z); vtx[k + 2] = z; }
+    let q = 0; for (let j = 0; j < n - 1; j++) for (let i = 0; i < n - 1; i++) { const a = j * n + i; ind[q++] = a; ind[q++] = a + n; ind[q++] = a + 1; ind[q++] = a + 1; ind[q++] = a + n; ind[q++] = a + n + 1; }
+    world.createCollider(RA.ColliderDesc.trimesh(vtx, ind).setFriction(0.0));
+    // bridge deck
+    const seg = 24, bv = [], bi = [], T = [-BR.D[2], 0, BR.D[0]];
+    for (let k = 0; k <= seg; k++) { const s = -BR.half + 2 * BR.half * k / seg; for (const t of [-BR.wid, BR.wid]) bv.push(BR.c[0] + BR.D[0] * s + T[0] * t, deckY(s), BR.c[2] + BR.D[2] * s + T[2] * t); }
+    for (let k = 0; k < seg; k++) { const a = k * 2; bi.push(a, a + 1, a + 2, a + 2, a + 1, a + 3, a, a + 2, a + 1, a + 2, a + 3, a + 1); }
+    world.createCollider(RA.ColliderDesc.trimesh(new Float32Array(bv), new Uint32Array(bi)).setFriction(0.0));
+    for (const o of OBST) { const a = -o.th; world.createCollider(RA.ColliderDesc.cuboid(o.hl, o.hh, o.ht).setTranslation(o.c[0], o.c[1] + o.hh, o.c[2]).setRotation({ x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) })); }
+    const body = world.createRigidBody(RA.RigidBodyDesc.dynamic().setTranslation(...phys.pos).lockRotations().setCcdEnabled(true).setLinearDamping(0));
+    world.createCollider(RA.ColliderDesc.ball(BALL).setFriction(0.0).setRestitution(0.0), body);
+    world.timestep = 1 / 60;
+    Object.assign(phys, { engine: 'Rapier ' + (RA.version ? RA.version() : ''), world, body, RAP: RA });
+  } catch (e) { console.warn('Rapier setup failed, using built-in physics', e); phys.world = null; phys.engine = 'built-in'; }
+}
+function physStep(dt, wantVX, wantVZ, jump) {
+  if (phys.world) {
+    const b = phys.body, lv = b.linvel();
+    let vy = lv.y;
+    if (jump) vy = 5.6;
+    b.setLinvel({ x: wantVX, y: vy, z: wantVZ }, true);
+    phys.world.step();
+    const t = b.translation(); phys.pos = [t.x, t.y, t.z]; const v = b.linvel(); phys.vel = [v.x, v.y, v.z];
+    // keep inside the world and above the ground
+    const r = Math.hypot(t.x, t.z), gh = groundHeight(t.x, t.z);
+    if (r > 440 || t.y < gh - 1.0) { const k = Math.min(1, 440 / r); b.setTranslation({ x: t.x * k, y: Math.max(t.y, groundHeight(t.x * k, t.z * k) + BALL + 0.05), z: t.z * k }, true); }
+  } else {
+    const p = phys.pos, v = phys.vel;
+    v[0] = wantVX; v[2] = wantVZ; if (jump) v[1] = 5.6;
+    v[1] -= 9.81 * dt;
+    let nx = p[0] + v[0] * dt, nz = p[2] + v[2] * dt, ny = p[1] + v[1] * dt;
+    for (const o of OBST) {
+      const dx = nx - o.c[0], dz = nz - o.c[2];
+      const lx = dx * o.rd[0] + dz * o.rd[2], lz = -dx * o.rd[2] + dz * o.rd[0];
+      const top = o.c[1] + o.hh * 2;
+      if (Math.abs(lx) < o.hl + BALL && Math.abs(lz) < o.ht + BALL && ny - BALL < top) {
+        const px = o.hl + BALL - Math.abs(lx), pz = o.ht + BALL - Math.abs(lz), pyU = top - (ny - BALL);
+        if (pyU < 0.25 && v[1] <= 0) { ny = top + BALL; v[1] = 0; }
+        else if (pz < px) { const s = Math.sign(lz) || 1, push = pz * s; nx += -o.rd[2] * push; nz += o.rd[0] * push; }
+        else { const s = Math.sign(lx) || 1, push = px * s; nx += o.rd[0] * push; nz += o.rd[2] * push; }
+      }
+    }
+    const r = Math.hypot(nx, nz); if (r > 440) { nx *= 440 / r; nz *= 440 / r; }
+    const gh = groundHeight(nx, nz) + BALL;
+    if (ny < gh) { ny = gh; if (v[1] < 0) v[1] = 0; }
+    phys.pos = [nx, ny, nz];
+  }
+  phys.grounded = phys.pos[1] - BALL - groundHeight(phys.pos[0], phys.pos[2]) < (phys.world ? 0.32 : 0.14) && phys.vel[1] < 1.0;
+}
+
+// ======================================================================
+//  Input
+// ======================================================================
+const keys = {};
+const cam = { yaw: 0, pitch: 0.2, dist: innerWidth < innerHeight ? 12 : 9, lastDrag: -10 };
+const joy = { x: 0, y: 0, id: null };
+let jumpReq = false, autoRide = true, tour = false, lastInput = -100, uiHidden = false;
+addEventListener('keydown', e => {
+  if (e.repeat && e.code !== 'Space') return;
+  keys[e.code] = true;
+  if (e.code === 'Space') { jumpReq = true; e.preventDefault(); }
+  if (e.code === 'KeyT') setTour(!tour);
+  if (e.code === 'KeyF') setAuto(!autoRide);
+  if (e.code === 'KeyH') setHide(!uiHidden);
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+const pointers = new Map(); let pinch0 = 0, dist0 = 9;
+canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]); if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); dist0 = cam.dist; } });
+canvas.addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) return;
+  const prev = pointers.get(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pointers.size === 1) { cam.yaw -= (e.clientX - prev[0]) * 0.0055; cam.pitch = clamp(cam.pitch + (e.clientY - prev[1]) * 0.0045, -0.25, 1.35); cam.lastDrag = now; }
+  else if (pointers.size === 2) { const [a, b] = [...pointers.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0 > 0) cam.dist = clamp(dist0 * pinch0 / d, 3, 45); }
+});
+const endP = e => { pointers.delete(e.pointerId); pinch0 = 0; };
+canvas.addEventListener('pointerup', endP); canvas.addEventListener('pointercancel', endP);
+canvas.addEventListener('wheel', e => { cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0011), 3, 45); e.preventDefault(); }, { passive: false });
+const joyEl = document.getElementById('joy'), knob = document.getElementById('knob');
+const joyMove = e => { const r = joyEl.getBoundingClientRect(); let dx = (e.clientX - r.left - r.width / 2) / (r.width / 2), dy = (e.clientY - r.top - r.height / 2) / (r.height / 2); const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; } joy.x = dx; joy.y = dy; knob.style.transform = `translate(${dx * 40}px,${dy * 40}px)`; };
+joyEl.addEventListener('pointerdown', e => { joy.id = e.pointerId; joyEl.setPointerCapture(e.pointerId); joyMove(e); e.preventDefault(); });
+joyEl.addEventListener('pointermove', e => { if (e.pointerId === joy.id) joyMove(e); });
+const joyEnd = e => { if (e.pointerId === joy.id) { joy.id = null; joy.x = joy.y = 0; knob.style.transform = ''; } };
+joyEl.addEventListener('pointerup', joyEnd); joyEl.addEventListener('pointercancel', joyEnd);
+document.getElementById('jump').addEventListener('pointerdown', e => { jumpReq = true; e.preventDefault(); });
+const bTour = document.getElementById('bTour'), bAuto = document.getElementById('bAuto'), bHide = document.getElementById('bHide');
+function setTour(on) { tour = on; tourT = 0; bTour.setAttribute('aria-pressed', on); }
+function setAuto(on) { autoRide = on; bAuto.setAttribute('aria-pressed', on); }
+function setHide(on) { uiHidden = on; document.body.classList.toggle('hide', on); bHide.setAttribute('aria-pressed', on); }
+bTour.onclick = () => setTour(!tour); bAuto.onclick = () => setAuto(!autoRide); bHide.onclick = () => setHide(!uiHidden);
+
+// ======================================================================
+//  Horse controller + animation
+// ======================================================================
+const horse = { heading: Math.PI, speed: 0, phase: 0, pitch: 0, airT: 0, manual: false, jumpCD: 0 };
+const blades = { base: m4() };
+const bones = new Float32Array(15 * 16);
+let now = 0, tourT = 0, debugView = null;
+function angDiff(a, b) { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; }
+function controlHorse(dt) {
+  let ix = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + joy.x;
+  let iz = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - joy.y;
+  const mag = Math.min(1, Math.hypot(ix, iz));
+  if (mag > 0.08) lastInput = now;
+  const gallop = keys.ShiftLeft || keys.ShiftRight || Math.hypot(joy.x, joy.y) > 0.92;
+  const p = phys.pos;
+  let targetSpeed = 0, desired = horse.heading, jump = false;
+  horse.manual = !autoRide || now - lastInput < 6;
+  if (horse.manual) {
+    if (mag > 0.08) {
+      const f = [-Math.sin(cam.yaw), -Math.cos(cam.yaw)], r = [Math.cos(cam.yaw), -Math.sin(cam.yaw)];
+      const dx = f[0] * iz + r[0] * ix, dz = f[1] * iz + r[1] * ix;
+      desired = Math.atan2(dx, dz);
+      targetSpeed = (gallop ? 13 : 6.2) * mag;
+    }
+    if (jumpReq) jump = true;
+  } else {
+    // follow the circular path clockwise and jump obstacles automatically
+    const th = Math.atan2(p[2], p[0]), r = Math.hypot(p[0], p[2]);
+    const tt = th - 0.16, tr = 60 + clamp((60 - r) * 0.0, -2, 2);
+    const tx = Math.cos(tt) * tr, tz = Math.sin(tt) * tr;
+    desired = Math.atan2(tx - p[0], tz - p[2]);
+    targetSpeed = 7.5;
+    const fx = Math.sin(horse.heading), fz = Math.cos(horse.heading);
+    for (const o of OBST) {
+      const dx = o.c[0] - p[0], dz = o.c[2] - p[2];
+      const ahead = dx * fx + dz * fz, lat = Math.abs(-dx * fz + dz * fx);
+      if (ahead > 0.6 && ahead < horse.speed * 0.42 + 1.2 && lat < 4.2) jump = true;
+    }
+    if (jumpReq) jump = true;
+  }
+  jumpReq = false;
+  const turn = clamp(angDiff(horse.heading, desired), -2.6 * dt, 2.6 * dt);
+  if (targetSpeed > 0.1 || horse.speed > 0.5) horse.heading += turn;
+  const acc = targetSpeed > horse.speed ? 5 : 8;
+  if (phys.grounded) horse.speed += clamp(targetSpeed - horse.speed, -acc * dt, acc * dt);
+  horse.jumpCD -= dt;
+  const doJump = jump && phys.grounded && horse.jumpCD <= 0;
+  if (doJump) horse.jumpCD = 0.6;
+  return [Math.sin(horse.heading) * horse.speed, Math.cos(horse.heading) * horse.speed, doJump];
+}
+function animate(dt) {
+  const sp = horse.speed, air = !phys.grounded;
+  horse.airT = air ? horse.airT + dt : 0;
+  horse.phase += dt * (0.6 + sp * 0.14) * (air ? 0.2 : 1);
+  const ph = horse.phase;
+  const gal = smooth(7.5, 10.5, sp), walk = 1 - smooth(2.5, 4.5, sp);
+  const offW = [0, 0.5, 0.75, 0.25], offT = [0, 0.5, 0.5, 0], offG = [0, 0.1, 0.55, 0.65];
+  const A = clamp(sp * 0.085, 0, 0.62);
+  const p = phys.pos, groundY = p[1] - BALL;
+  const fx = Math.sin(horse.heading), fz = Math.cos(horse.heading);
+  const slope = (groundHeight(p[0] + fx * 1.2, p[2] + fz * 1.2) - groundHeight(p[0] - fx * 1.2, p[2] - fz * 1.2)) / 2.4;
+  let pitch = -Math.atan(slope);
+  let bob = 0;
+  if (!air) { bob = (1 - gal) * 0.045 * Math.sin(ph * TAU * 2) * smooth(0.5, 3, sp); pitch += gal * 0.07 * Math.sin(ph * TAU); bob += gal * 0.07 * Math.sin(ph * TAU + 1.0); }
+  else pitch += clamp(-phys.vel[1] * 0.06, -0.3, 0.3);
+  horse.pitch = mix(horse.pitch, pitch, Math.min(1, dt * 8));
+  const HM = mul(mT(p[0], groundY + bob, p[2]), mRy(horse.heading), mT(0, 1.3, 0), mRx(horse.pitch), mT(0, -1.3, 0));
+  const set = (g, m) => bones.set(m, (g - 1) * 16);
+  set(1, mul(HM, mT(...PIV.body)));
+  const nod = air ? -0.15 : 0.07 * Math.sin(ph * TAU * 2) * smooth(0.5, 3, sp) + (sp < 0.5 ? 0.35 : 0) - gal * 0.12;
+  set(2, mul(HM, mT(...PIV.neck), mRx(nod)));
+  set(3, mul(HM, mT(...PIV.tail), mRy(Math.sin(now * 1.7) * 0.25), mRx(0.2 + sp * 0.045)));
+  for (let k = 0; k < 4; k++) {
+    const hind = k >= 2;
+    const off = mix(mix(offT[k], offW[k], walk), offG[k], gal);
+    const pp = (ph + off) * TAU;
+    let up = A * Math.sin(pp), knee = (hind ? 0.5 : 0.9) * A * 1.6 * Math.max(0, Math.cos(pp));
+    if (air) { const tuck = smooth(0, 0.18, horse.airT); up = mix(up, hind ? -0.55 : 0.85, tuck); knee = mix(knee, hind ? 1.1 : 1.7, tuck); }
+    const U = mul(HM, mT(...PIV.legs[k]), mRx(-up));
+    set(4 + k, U);
+    set(8 + k, mul(U, mT(0, -0.58, 0), mRx(hind ? -knee : knee)));
+  }
+  const lean = gal * 0.22 + (air ? 0.18 : 0);
+  const RM = mul(HM, mT(...PIV.rider), mRx(lean), mT(0, -bob * 0.4, 0));
+  set(12, RM);
+  set(15, mul(RM, mT(...PIV.cloak), mRx(0.08 + sp * 0.025 + 0.05 * Math.sin(now * 5.5) * smooth(2, 8, sp))));
+  const AM = mul(RM, mT(...PIV.arm), mRx(0.12 * Math.sin(ph * TAU) * smooth(0.5, 3, sp)));
+  set(13, AM);
+  set(14, mul(blades.base, mRz(now * 0.55)));
+  const L = xform(AM, LANTERN_LOCAL);
+  LIGHTS[0] = [L[0], L[1], L[2], 2.4 + 0.25 * Math.sin(now * 13) + 0.15 * Math.sin(now * 7.1)];
+}
+
+// tour path (closed Catmull-Rom over pos & look)
+const TOUR = [[[140, 45, 120], [0, 5, 0]], [[60, 26, -60], [105, 10, -25]], [[-20, 18, -118], [-15, 2, -170]], [[200, 40, -150], [295, 14, -191]],
+  [[120, 70, -300], [-70, 8, -290]], [[-60, 34, -205], [-98, 18, -312]], [[-220, 95, -140], [0, 160, -1500]], [[-150, 60, 120], [200, 80, -900]], [[10, 11, 88], [0, 3, 0]]];
+function cr(a, b, c, d, t) { const t2 = t * t, t3 = t2 * t; return a.map((_, i) => 0.5 * (2 * b[i] + (-a[i] + c[i]) * t + (2 * a[i] - 5 * b[i] + 4 * c[i] - d[i]) * t2 + (-a[i] + 3 * b[i] - 3 * c[i] + d[i]) * t3)); }
+function tourAt(t) { const n = TOUR.length, seg = 9.5, u = (t / seg) % n, i = Math.floor(u), f = u - i; const g = k => TOUR[(i + k + n) % n]; return [cr(g(-1)[0], g(0)[0], g(1)[0], g(2)[0], smooth(0, 1, f) * 0.3 + f * 0.7), cr(g(-1)[1], g(0)[1], g(1)[1], g(2)[1], smooth(0, 1, f) * 0.3 + f * 0.7)]; }
+
+// ======================================================================
+//  Boot
+// ======================================================================
+const lt = document.getElementById('ltext'), lb = document.getElementById('lbar');
+const tick = (msg, pct) => { lt.textContent = msg; lb.style.width = pct + '%'; return new Promise(r => setTimeout(r, 0)); };
+let prog, progG, progU, vaoS, vaoG, vaoU, nUnder = 0, nStrokes = 0, statsEl = document.getElementById('stats');
+const GN = isTouch ? 170 : 280, GSP = isTouch ? 0.36 : 0.3;
+let resScale = 1, fpsAcc = 0, fpsN = 0, fps = 60, lastDown = -10, lastT = 0;
+async function boot() {
+  const rapierP = loadRapier();
+  sInit(Math.round(1300000 * Q) + 50000);
+  const steps = [['Painting the swirling sky', genSky], ['Gilding moon and stars', genMoonStars], ['Layering mountains', genMountains], ['Brushing the fields', genGround],
+    ['Laying the river and waterfall', genRiver], ['Setting the stone bridge', genBridge], ['Planting sunflowers', genSunflowers], ['Sowing wheat', genWheat],
+    ['Raising cypresses', () => { cypress(BIGCYP[0], BIGCYP[1], 21, 2.4, 1.6); [[30, -95, 13], [-60, -228, 15], [-125, -275, 12], [55, -255, 14], [140, 40, 12], [-150, 25, 14], [-35, -330, 11], [175, -40, 10]].forEach(([x, z, h]) => cypress(x, z, h, 1.5, 1.2)); }],
+    ['Building the village', genVillage], ['Turning the windmill', () => genWindmillCottage(blades)], ['Placing fences, walls and logs', genObstacles], ['Saddling the horse', genHorseRider]];
+  window.SNR.counts = {};
+  for (let i = 0; i < steps.length; i++) { await tick(steps[i][0] + '…', 5 + i / steps.length * 80); const n0 = S.n; steps[i][1](); window.SNR.counts[steps[i][0]] = S.n - n0; }
+  nStrokes = S.n;
+  await tick('Priming the canvas…', 88);
+  const U = genUnder(); nUnder = U.idx.length;
+  // GL resources
+  prog = compile(VS_STROKE, FS_STROKE); progG = compile(VS_GRASS, FS_STROKE); progU = compile(VS_UNDER, FS_UNDER);
+  const corner = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, corner); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  vaoS = gl.createVertexArray(); gl.bindVertexArray(vaoS);
+  gl.bindBuffer(gl.ARRAY_BUFFER, corner); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  const bF = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bF); gl.bufferData(gl.ARRAY_BUFFER, S.F.subarray(0, S.n * 6), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 0); gl.vertexAttribDivisor(1, 1);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 24, 12); gl.vertexAttribDivisor(2, 1);
+  const bI = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bI); gl.bufferData(gl.ARRAY_BUFFER, S.I.subarray(0, S.n * 8), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 4, gl.BYTE, false, 8, 0); gl.vertexAttribDivisor(3, 1);
+  gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 4, gl.BYTE, false, 8, 4); gl.vertexAttribDivisor(4, 1);
+  const bU = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bU); gl.bufferData(gl.ARRAY_BUFFER, S.U.subarray(0, S.n * 8), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(5); gl.vertexAttribPointer(5, 4, gl.UNSIGNED_BYTE, true, 8, 0); gl.vertexAttribDivisor(5, 1);
+  gl.enableVertexAttribArray(6); gl.vertexAttribPointer(6, 4, gl.UNSIGNED_BYTE, true, 8, 4); gl.vertexAttribDivisor(6, 1);
+  vaoG = gl.createVertexArray(); gl.bindVertexArray(vaoG);
+  gl.bindBuffer(gl.ARRAY_BUFFER, corner); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  vaoU = gl.createVertexArray(); gl.bindVertexArray(vaoU);
+  for (const [i, arr] of [[0, U.pos], [1, U.col], [2, U.nrm]]) { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW); gl.enableVertexAttribArray(i); gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 0, 0); }
+  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, U.idx, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  S.F = S.I = S.U = null; // free CPU copies
+  await tick('Waiting for physics…', 94);
+  const RA = await rapierP;
+  setupPhysics(RA);
+  for (let i = 1; i < 16; i++) if (!LIGHTS[i]) LIGHTS[i] = [0, 0, 0, 0];
+  resize(); addEventListener('resize', resize);
+  document.getElementById('loading').style.display = 'none';
+  window.SNR.ready = true; window.SNR.engine = phys.engine; window.SNR.strokes = nStrokes;
+  lastT = performance.now();
+  if (!TEST) requestAnimationFrame(loop);
+}
+function resize() {
+  const w = Math.max(1, Math.floor(innerWidth * DPR * resScale)), h = Math.max(1, Math.floor(innerHeight * DPR * resScale));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+}
+const lightsArr = new Float32Array(64);
+function render() {
+  const W = canvas.width, Hh = canvas.height;
+  gl.viewport(0, 0, W, Hh);
+  // camera
+  let eye, tgt;
+  if (debugView) { [eye, tgt] = debugView; }
+  else if (tour) { [eye, tgt] = tourAt(tourT); }
+  else {
+    tgt = [phys.pos[0], phys.pos[1] - BALL + 2.3, phys.pos[2]];
+    const cp = Math.cos(cam.pitch);
+    eye = [tgt[0] + Math.sin(cam.yaw) * cp * cam.dist, tgt[1] + Math.sin(cam.pitch) * cam.dist, tgt[2] + Math.cos(cam.yaw) * cp * cam.dist];
+    eye[1] = Math.max(eye[1], groundHeight(eye[0], eye[2]) + 0.7);
+  }
+  const fov = 55 * Math.PI / 180;
+  const proj = persp(fov, W / Hh, 0.25, 6000), view = lookAt(eye, tgt, UP), vp = mmul(proj, view);
+  const focal = 0.5 * Hh / Math.tan(fov / 2), pxs = DPR * resScale;
+  for (let i = 0; i < 16; i++) lightsArr.set(LIGHTS[i], i * 4);
+  gl.clearColor(0.05, 0.10, 0.32, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.disable(gl.CULL_FACE); gl.disable(gl.BLEND);
+  const common = P => {
+    gl.useProgram(P.p); const u = P.U;
+    gl.uniformMatrix4fv(u.u_vp, false, vp); gl.uniform3fv(u.u_cam, eye); gl.uniform1f(u.u_time, now);
+    if (u.u_focal) { gl.uniform1f(u.u_focal, focal); gl.uniform1f(u.u_target, 8 * pxs); gl.uniform1f(u.u_minPx, 1.6 * pxs); gl.uniform1f(u.u_maxPx, 0.17 * Hh); }
+    gl.uniform3fv(u.u_moonDir, MOON); gl.uniform4fv(u.u_lights, lightsArr);
+    if (u.u_bones) gl.uniformMatrix4fv(u.u_bones, false, bones);
+  };
+  // 1) underpaint ground coat + mountain silhouettes
+  common(progU); gl.bindVertexArray(vaoU);
+  gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(2, 8);
+  gl.drawElements(gl.TRIANGLES, nUnder, gl.UNSIGNED_INT, 0);
+  gl.disable(gl.POLYGON_OFFSET_FILL);
+  // 2) brush strokes
+  gl.enable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+  common(prog); gl.bindVertexArray(vaoS);
+  gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, nStrokes);
+  // 3) grass around the camera
+  common(progG); gl.bindVertexArray(vaoG);
+  gl.uniform2f(progG.U.u_gOrigin, Math.floor(eye[0] / GSP) - GN / 2, Math.floor(eye[2] / GSP) - GN / 2);
+  gl.uniform1f(progG.U.u_gSpacing, GSP); gl.uniform1i(progG.U.u_gN, GN);
+  gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, GN * GN);
+  gl.disable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+  gl.bindVertexArray(null);
+}
+let acc = 0;
+function update(dt) {
+  dt = Math.min(dt, 0.1);
+  now += dt; if (tour) tourT += dt;
+  acc += dt;
+  let steps = 0;
+  while (acc >= 1 / 60 && steps < 5) {
+    const [vx, vz, j] = controlHorse(1 / 60);
+    physStep(1 / 60, vx, vz, j);
+    acc -= 1 / 60; steps++;
+  }
+  if (steps === 5) acc = 0;
+  animate(dt);
+  // camera follows behind the horse unless the view was dragged recently
+  if (!tour && now - cam.lastDrag > 2.5 && (horse.speed > 1 || !horse.manual)) cam.yaw += angDiff(cam.yaw, horse.heading + Math.PI) * Math.min(1, dt * 1.5);
+  document.getElementById('mode').textContent = tour ? 'camera tour' : horse.manual ? 'manual ride' : 'auto-ride (path)';
+}
+function loop(t) {
+  const dt = (t - lastT) / 1000; lastT = t;
+  update(dt); render();
+  // adaptive resolution
+  fpsAcc += dt; fpsN++;
+  if (fpsAcc > 1.0) {
+    fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0;
+    if (!QS.has('noadapt')) {
+      if (fps < 42 && resScale > 0.42) { resScale = Math.max(0.42, resScale * 0.85); lastDown = now; resize(); }
+      else if (fps > 57 && resScale < 1 && now - lastDown > 4) { resScale = Math.min(1, resScale * 1.08); resize(); }
+    }
+    statsEl.textContent = `${fps.toFixed(0)} fps · ${(nStrokes + GN * GN).toLocaleString('en')} strokes · res ${Math.round(resScale * 100)}% · ${phys.engine}`;
+  }
+  requestAnimationFrame(loop);
+}
+// test hooks (used by the headless checks)
+window.SNR = {
+  ready: false,
+  step(dt, n = 1) { for (let i = 0; i < n; i++) update(dt); render(); gl.finish(); return { pos: phys.pos.slice(), speed: horse.speed, grounded: phys.grounded, manual: horse.manual }; },
+  setTour, setAuto, keys, cam, horse, phys, get resScale() { return resScale; }, set resScale(v) { resScale = v; resize(); },
+  setTourT(t) { tourT = t; }, setView(e, t) { debugView = e ? [e, t] : null; }, jump() { jumpReq = true; }, obst: OBST,
+};
+boot().catch(e => { console.error(e); lt.textContent = 'Error: ' + e.message; window.SNR.error = e.message; });
+}
+</script>
+</body>
+</html>
