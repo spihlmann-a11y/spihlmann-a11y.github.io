@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Taktflasche ist ein Produktkonzept für eine wiederbefüllbare Flasche mit Lichtsignal. Probiere die interaktive Vorschau aus.">
+<title>Taktflasche · Deine Trinkpause im Blick</title>
+<style>
+:root{color-scheme:light;--ink:#142c27;--muted:#435a51;--paper:#f8f9f4;--green:#d8eadb;--action:#164c3e;--line:#cbd9cf;--lime:#dbff91}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:1rem/1.55 "Segoe UI",system-ui,sans-serif}
+a{color:inherit} a:focus-visible,button:focus-visible{outline:3px solid #a4560a;outline-offset:5px}
+.wrap{width:min(1120px,calc(100% - 2.75rem));margin-inline:auto}
+header{border-bottom:1px solid var(--line)}
+header .wrap{min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.brand{display:flex;align-items:center;gap:.65rem;font-weight:750;letter-spacing:-.025em;font-size:1.25rem}
+.brand-mark{display:inline-flex;width:1.8rem;height:1.8rem;border-radius:50%;border:1px solid var(--action);align-items:center;justify-content:center}
+.brand-mark::after{content:"";width:.55rem;height:.55rem;border-radius:50%;background:var(--action)}
+header a{font-weight:650;text-underline-offset:.25em}
+.hero{display:grid;grid-template-columns:.92fr 1.08fr;align-items:center;gap:clamp(1.5rem,5vw,5rem);padding-block:clamp(2.6rem,7vw,6rem)}
+.concept{font-size:.9rem;font-weight:700;letter-spacing:.075em;text-transform:uppercase;color:var(--muted);margin:0 0 .8rem}
+h1,h2,p{margin-top:0}
+h1{font-size:clamp(2.7rem,6vw,5.2rem);line-height:.99;letter-spacing:-.066em;margin-bottom:1.4rem;max-width:9em}
+.lead{max-width:36rem;color:var(--muted);font-size:clamp(1rem,1.5vw,1.15rem);margin-bottom:1.45rem}
+button{display:inline-flex;gap:.7rem;align-items:center;text-align:left;background:var(--action);color:white;border:1px solid transparent;border-radius:100px;padding:.85rem 1.2rem;font:inherit;font-weight:700;min-height:48px;cursor:pointer}
+button:hover{background:#103c30}
+button[hidden]{display:none}
+button::after{content:"";width:.6rem;height:.6rem;border-radius:50%;background:var(--lime)}
+.status{min-height:3.2rem;color:var(--muted);font-size:.92rem;margin:.65rem 0 0}
+.status:empty{margin:0;min-height:0}
+figure{margin:0}
+.stage{height:clamp(275px,43vw,475px);border:1px solid #c3d8c9;border-radius:28px;display:grid;place-items:center;position:relative;isolation:isolate;overflow:hidden;background:radial-gradient(ellipse at 45% 34%,#f0f7ea 0%,#d8eadb 55%,#bdd8c6 100%)}
+.stage::before{content:"";position:absolute;width:76%;height:66%;border:1px solid #a9c4b4;border-radius:50%;transform:rotate(-20deg);z-index:-1}
+.shadow{width:47%;height:9%;position:absolute;top:82%;left:28%;background:#2e584c;opacity:.31;filter:blur(13px);border-radius:100%;transform:rotate(-8deg)}
+.bottle{width:29%;height:76%;max-width:156px;position:relative;align-self:center;transform:rotate(-11deg);filter:drop-shadow(8px 8px 11px #52756942)}
+.cap{position:absolute;top:0;left:10%;width:80%;height:15%;border-radius:24% 24% 10% 10% / 30% 30% 12% 12%;background:repeating-linear-gradient(90deg,#ffffff0b 0px,#ffffff0b 1px,#ffffff00 2px,#ffffff00 5px),linear-gradient(90deg,#173c33,#365e4e 33%,#16392e 83%,#10261e);box-shadow:inset 0 2px #ffffff45}
+.led{position:absolute;top:13%;left:10%;width:80%;height:2.2%;z-index:2;background:linear-gradient(90deg,#89a396,#e3ead9,#718a7d);border-radius:0 0 45% 45% / 0 0 22% 22%;transition:box-shadow .18s ease,background .18s ease}
+.is-lit .led{background:#e8ffa2;box-shadow:0 0 5px 3px #e6ffa1,0 0 22px 9px #a5eb58}
+.body{position:absolute;top:15%;width:100%;height:85%;border-radius:31% 31% 17% 17% / 12% 12% 5% 5%;background:linear-gradient(90deg,#225345 1%,#3c7161 13%,#599580 34%,#397762 62%,#174638 91%,#123529 100%);box-shadow:inset 0 3px 4px #fff5,inset 0 -7px 12px #183c30;display:grid;place-items:center}
+.body::before{content:"";width:1.15rem;height:1.15rem;border-radius:50%;border:1px solid #e1f6e8;box-shadow:inset 0 0 0 5px #397762;background:#e1f6e8}
+figcaption{font-size:.9rem;color:var(--muted);margin-top:.5rem}
+.details{padding:clamp(2rem,5vw,3.6rem) 0;border-top:1px solid var(--line)}
+h2{font-size:clamp(1.9rem,4vw,3.05rem);letter-spacing:-.05em;line-height:1.1;margin-bottom:1.4rem}
+.features{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+article{border:1px solid var(--line);border-radius:18px;padding:clamp(1rem,2.25vw,1.55rem);background:#fff}
+h3{margin:0 0 .4rem;font-size:1.14rem;line-height:1.25}article p{margin:0;color:var(--muted)}
+footer{border-top:1px solid var(--line);padding:1.3rem 0 1.6rem;color:var(--muted);font-size:.95rem}footer p{margin:0;max-width:55rem}
+@media(max-width:760px){.hero{grid-template-columns:1fr;gap:1.7rem}.stage{height:clamp(275px,75vw,395px)}.hero h1{max-width:12em}}
+@media(max-width:480px){.wrap{width:calc(100% - 2rem)}.features{grid-template-columns:1fr}header .wrap{min-height:60px}.stage{border-radius:21px}}
+@media(prefers-reduced-motion:reduce){.led{transition:none}}
+</style>
+</head>
+<body>
+<header>
+<div class="wrap"><span class="brand"><span class="brand-mark" aria-hidden="true"></span>Taktflasche</span><a href="#funktionen">Funktionen</a></div>
+</header>
+<main class="wrap">
+<section class="hero" aria-labelledby="headline">
+  <div>
+    <p class="concept">Produktkonzept</p>
+    <h1 id="headline">Deine Trinkpause im Blick.</h1>
+    <p class="lead">Wenn du konzentriert arbeitest, gerät das Trinken leicht in den Hintergrund. Die Taktflasche ist das Konzept für eine wiederbefüllbare Flasche, die dich mit einem Lichtsignal an deine Trinkpause erinnert. Den Abstand zwischen den Signalen stellst du direkt an der Flasche ein.</p>
+    <button id="demo" type="button" aria-controls="vormodell" hidden>Lichtsignal ausprobieren</button>
+    <p class="status" id="status" role="status"></p>
+    <noscript><p>Für die interaktive Lichtdemo muss JavaScript aktiviert sein.</p></noscript>
+  </div>
+  <figure>
+    <div class="stage" id="vormodell" aria-hidden="true"><div class="shadow"></div><div class="bottle"><div class="cap"></div><div class="body"></div><div class="led"></div></div></div>
+    <figcaption>Entwurf der Taktflasche mit Leuchtring am Deckel</figcaption>
+  </figure>
+</section>
+<section class="details" id="funktionen" aria-labelledby="features-title">
+  <h2 id="features-title">So soll die Taktflasche funktionieren</h2>
+  <div class="features">
+    <article><h3>Ein Signal direkt an der Flasche</h3><p>Ein Lichtsignal auf deinem Schreibtisch erinnert dich an eine kurze Trinkpause.</p></article>
+    <article><h3>Ein Rhythmus für deinen Arbeitstag</h3><p>Wähle den Abstand zwischen den Erinnerungen so, wie es für dich passt.</p></article>
+    <article><h3>Ohne App startklar</h3><p>Die Bedienung ist direkt an der Flasche vorgesehen. Du brauchst dafür weder ein Konto noch eine Bluetooth-Verbindung.</p></article>
+    <article><h3>Fürs Nachfüllen gedacht</h3><p>Füll die Flasche am Wasserhahn wieder auf. Für die Reinigung soll sich das Lichtmodul abnehmen lassen.</p></article>
+  </div>
+</section>
+</main>
+<footer><div class="wrap"><p>Dies ist ein Produktkonzept. Die Demo zeigt das geplante Lichtsignal. Ausstattung und Verfügbarkeit stehen noch offen.</p></div></footer>
+<script>
+const button = document.getElementById('demo');
+const model = document.getElementById('vormodell');
+const status = document.getElementById('status');
+const light = model.querySelector('.led');
+let resetSignal;
+
+button.addEventListener('click', () => {
+  clearTimeout(resetSignal);
+  model.classList.add('is-lit');
+  status.textContent = 'So könnte deine Flasche bei der nächsten Trinkpause aufleuchten.';
+  const lightBounds = light.getBoundingClientRect();
+  if (lightBounds.top < 0 || lightBounds.bottom > window.innerHeight) {
+    light.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  resetSignal = setTimeout(() => {
+    model.classList.remove('is-lit');
+    status.textContent = 'Die Lichtdemo ist beendet.';
+  }, 3500);
+});
+
+button.hidden = false;
+</script>
+</body>
+</html>
